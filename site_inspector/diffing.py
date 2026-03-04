@@ -22,7 +22,7 @@ def load_run_dir(run_dir: Path) -> Dict[str, Any]:
 
 def list_pages_from_run(run: Dict[str, Any]) -> List[str]:
     pages = (run.get("crawl") or {}).get("pages") or []
-    out: List[str] = []
+    out = []
     for p in pages:
         u = p.get("url")
         if u:
@@ -47,7 +47,7 @@ def tech_names_from_run(run: Dict[str, Any]) -> Dict[str, List[str]]:
 
     b = tech.get("builtwith")
     if isinstance(b, dict):
-        names: List[str] = []
+        names = []
         for _, items in b.items():
             if isinstance(items, list):
                 for it in items:
@@ -73,253 +73,240 @@ def diff_sets(a: List[str], b: List[str]) -> Dict[str, List[str]]:
     return {
         "added": sorted(sb - sa),
         "removed": sorted(sa - sb),
-        "same": sorted(sa & sb),
+        "unchanged": sorted(sa & sb),
     }
 
 
-def diff_pages(run_a: Dict[str, Any], run_b: Dict[str, Any]) -> Dict[str, Any]:
-    a_pages = list_pages_from_run(run_a)
-    b_pages = list_pages_from_run(run_b)
-    pages_diff = diff_sets(a_pages, b_pages)
-    return {
-        **pages_diff,
-        "count": {
-            "runA": len(a_pages),
-            "runB": len(b_pages),
-        },
+def diff_quality(run_a: Dict[str, Any], run_b: Dict[str, Any], *, score_regression_threshold: float) -> Dict[str, Any]:
+    qa = run_a.get("quality")
+    qb = run_b.get("quality")
+    out: Dict[str, Any] = {
+        "available": bool(qa) and bool(qb),
+        "summary": {},
+        "per_page": [],
+        "regressions": [],
+    }
+    if not qa or not qb:
+        out["summary"] = {"note": "One or both runs missing 'quality' block"}
+        return out
+
+    idx_a = quality_index_by_url(run_a)
+    idx_b = quality_index_by_url(run_b)
+
+    urls = sorted(set(idx_a.keys()) | set(idx_b.keys()))
+    regressions = []
+
+    out["summary"] = {
+        "runA_passed": qa.get("passed"),
+        "runB_passed": qb.get("passed"),
+        "runA_pages_failed": qa.get("pages_failed"),
+        "runB_pages_failed": qb.get("pages_failed"),
     }
 
-
-def diff_third_parties(run_a: Dict[str, Any], run_b: Dict[str, Any]) -> Dict[str, Any]:
-    a = third_parties_from_run(run_a)
-    b = third_parties_from_run(run_b)
-    return diff_sets(a, b)
-
-
-def diff_tech(run_a: Dict[str, Any], run_b: Dict[str, Any]) -> Dict[str, Any]:
-    a = tech_names_from_run(run_a)
-    b = tech_names_from_run(run_b)
-
-    out: Dict[str, Any] = {}
-    for k in sorted(set(a.keys()) | set(b.keys())):
-        out[k] = diff_sets(a.get(k, []), b.get(k, []))
-    return out
-
-
-def summarize_quality_by_url(run: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    by_url = quality_index_by_url(run)
-    out: Dict[str, Dict[str, Any]] = {}
-    for url, r in by_url.items():
-        cats = r.get("categories") or {}
-        out[url] = {
-            "performance": cats.get("performance"),
-            "accessibility": cats.get("accessibility"),
-            "best_practices": cats.get("best-practices") or cats.get("best_practices"),
-            "seo": cats.get("seo"),
-            "pwa": cats.get("pwa"),
-            "passed": (r.get("budget_eval") or {}).get("passed"),
-            "failed_rules": (r.get("budget_eval") or {}).get("failed") or [],
-        }
-    return out
-
-
-def diff_quality(run_a: Dict[str, Any], run_b: Dict[str, Any]) -> Dict[str, Any]:
-    qa = summarize_quality_by_url(run_a)
-    qb = summarize_quality_by_url(run_b)
-
-    urls = sorted(set(qa.keys()) | set(qb.keys()))
-    rows: List[Dict[str, Any]] = []
     for u in urls:
-        rows.append({"url": u, "a": qa.get(u), "b": qb.get(u)})
+        ra = idx_a.get(u)
+        rb = idx_b.get(u)
+        row: Dict[str, Any] = {"url": u, "a": None, "b": None, "deltas": {}, "regression": False, "reasons": []}
 
-    return {
-        "count": {"runA": len(qa), "runB": len(qb)},
-        "rows": rows,
-    }
-
-
-def _score_delta(a: Optional[float], b: Optional[float]) -> Optional[float]:
-    if a is None or b is None:
-        return None
-    try:
-        return float(b) - float(a)
-    except Exception:
-        return None
-
-
-def _regressions_from_quality_rows(
-    rows: List[Dict[str, Any]],
-    score_regression_threshold: float = 0.05,
-) -> Dict[str, Any]:
-    regressions: List[Dict[str, Any]] = []
-
-    for row in rows:
-        a = row.get("a") or {}
-        b = row.get("b") or {}
-        url = row.get("url")
-
-        for k in ["performance", "accessibility", "best_practices", "seo", "pwa"]:
-            d = _score_delta(a.get(k), b.get(k))
-            if d is None:
-                continue
-            if d < -abs(score_regression_threshold):
-                regressions.append(
-                    {
-                        "url": url,
-                        "metric": k,
-                        "runA": a.get(k),
-                        "runB": b.get(k),
-                        "delta": d,
-                    }
-                )
+        if ra:
+            row["a"] = {
+                "scores": ra.get("scores"),
+                "passed": (ra.get("budget_eval") or {}).get("passed"),
+            }
+        if rb:
+            row["b"] = {
+                "scores": rb.get("scores"),
+                "passed": (rb.get("budget_eval") or {}).get("passed"),
+            }
 
         a_pass = row["a"]["passed"] if row["a"] else None
         b_pass = row["b"]["passed"] if row["b"] else None
         if a_pass is True and b_pass is False:
-            regressions.append(
-                {
-                    "url": url,
-                    "metric": "budget_passed",
-                    "runA": True,
-                    "runB": False,
-                    "delta": None,
-                }
-            )
+            row["regression"] = True
+            row["reasons"].append("budget_regression_pass_to_fail")
 
-    regressions = sorted(
-        regressions,
-        key=lambda x: (x.get("metric") or "", x.get("delta") if x.get("delta") is not None else 0),
-    )
-    return {"count": len(regressions), "items": regressions}
+        a_scores = (row["a"] or {}).get("scores") or {}
+        b_scores = (row["b"] or {}).get("scores") or {}
+        for cat in ["performance", "seo", "accessibility", "best-practices"]:
+            av = a_scores.get(cat)
+            bv = b_scores.get(cat)
+            if isinstance(av, (int, float)) and isinstance(bv, (int, float)):
+                delta = float(bv) - float(av)
+                row["deltas"][cat] = delta
+                if delta < -abs(score_regression_threshold):
+                    row["regression"] = True
+                    row["reasons"].append(f"score_drop_{cat}_{delta:.3f}")
+
+        out["per_page"].append(row)
+        if row["regression"]:
+            regressions.append({"url": u, "reasons": row["reasons"], "deltas": row["deltas"]})
+
+    out["regressions"] = regressions
+    return out
 
 
-def diff_runs(
-    run_a: Dict[str, Any],
-    run_b: Dict[str, Any],
-    allow_new_third_parties: Optional[List[str]] = None,
-    fail_on_new_third_parties: bool = False,
-    score_regression_threshold: float = 0.05,
-) -> Dict[str, Any]:
-    pages_diff = diff_pages(run_a, run_b)
-    tps_diff = diff_third_parties(run_a, run_b)
-    tech_diff = diff_tech(run_a, run_b)
-    quality_diff = diff_quality(run_a, run_b)
+def diff_runs(run_a: Dict[str, Any], run_b: Dict[str, Any], *, allow_new_third_parties: Optional[List[str]], score_regression_threshold: float) -> Dict[str, Any]:
+    pages_a = list_pages_from_run(run_a)
+    pages_b = list_pages_from_run(run_b)
 
-    regressions = _regressions_from_quality_rows(
-        quality_diff.get("rows") or [],
-        score_regression_threshold=score_regression_threshold,
-    )
+    tps_a = third_parties_from_run(run_a)
+    tps_b = third_parties_from_run(run_b)
+
+    tech_a = tech_names_from_run(run_a)
+    tech_b = tech_names_from_run(run_b)
+
+    pages_diff = diff_sets(pages_a, pages_b)
+    tps_diff = diff_sets(tps_a, tps_b)
+
+    allow = set(allow_new_third_parties or [])
+    new_tps = tps_diff["added"]
+    disallowed_new_tps = [d for d in new_tps if d not in allow] if allow_new_third_parties is not None else []
+
+    quality_diff = diff_quality(run_a, run_b, score_regression_threshold=score_regression_threshold)
 
     passed = True
     reasons: List[str] = []
 
-    # Optional gate: new third parties
-    if fail_on_new_third_parties:
-        allow = set(allow_new_third_parties or [])
-        added = set(tps_diff.get("added") or [])
-        disallowed = sorted([x for x in added if x not in allow])
-        if disallowed:
-            passed = False
-            reasons.append(f"New third-party domains detected: {', '.join(disallowed)}")
-
-    # Optional gate: score regressions
-    if regressions.get("count", 0) > 0:
+    if quality_diff.get("available") and quality_diff.get("regressions"):
         passed = False
-        reasons.append(f"Detected {regressions.get('count')} score regressions >= {score_regression_threshold}")
+        reasons.append("quality_regressions")
 
-    # Some run-level convenience stats (if present)
-    sa = run_a.get("summary") or {}
-    sb = run_b.get("summary") or {}
-    extra = {
-        "runA_pages_count": sa.get("pages_count"),
-        "runB_pages_count": sb.get("pages_count"),
-        "runA_js_disabled_not_readable": sa.get("pages_js_disabled_not_readable"),
-        "runB_js_disabled_not_readable": sb.get("pages_js_disabled_not_readable"),
-    }
+    if allow_new_third_parties is not None and disallowed_new_tps:
+        passed = False
+        reasons.append("new_third_parties_not_allowed")
+
+    qa = (run_a.get("quality") or {}).get("passed")
+    qb = (run_b.get("quality") or {}).get("passed")
+    if qa is True and qb is False:
+        passed = False
+        reasons.append("overall_budget_pass_to_fail")
+
+    # v0.4: include extractability (if present) as informational (not gating by default)
+    pwa = run_a.get("playwright") or {}
+    pwb = run_b.get("playwright") or {}
+    extract_diff = None
+    if pwa and pwb:
+        ea = (pwa.get("extractability_rollup") or {})
+        eb = (pwb.get("extractability_rollup") or {})
+        extract_diff = {
+            "runA_js_disabled_readable": ea.get("pages_js_disabled_readable"),
+            "runB_js_disabled_readable": eb.get("pages_js_disabled_readable"),
+            "runA_js_disabled_not_readable": ea.get("pages_js_disabled_not_readable"),
+            "runB_js_disabled_not_readable": eb.get("pages_js_disabled_not_readable"),
+        }
 
     out = {
         "version": "0.4",
         "generated_at": now_iso(),
-        "runA": {
-            "dir": run_a.get("_run_dir"),
-            "generated_at": run_a.get("generated_at"),
-            "target_url": run_a.get("target_url"),
-        },
-        "runB": {
-            "dir": run_b.get("_run_dir"),
-            "generated_at": run_b.get("generated_at"),
-            "target_url": run_b.get("target_url"),
-        },
+        "runA": {"dir": run_a.get("_run_dir"), "generated_at": run_a.get("generated_at"), "target_url": run_a.get("target_url")},
+        "runB": {"dir": run_b.get("_run_dir"), "generated_at": run_b.get("generated_at"), "target_url": run_b.get("target_url")},
         "passed": passed,
         "fail_reasons": reasons,
         "pages": pages_diff,
         "third_parties": {
             **tps_diff,
             "allowlist_used": allow_new_third_parties is not None,
-            "allowlist": sorted(list(set(allow_new_third_parties or []))) if allow_new_third_parties is not None else None,
-            "disallowed_added": (
-                sorted([x for x in (tps_diff.get("added") or []) if x not in set(allow_new_third_parties or [])])
-                if allow_new_third_parties is not None
-                else None
-            ),
+            "allowlist": sorted(list(allow)) if allow_new_third_parties is not None else None,
+            "disallowed_added": disallowed_new_tps if allow_new_third_parties is not None else None,
         },
-        "tech": tech_diff,
+        "tech": {
+            "wappalyzer": diff_sets(tech_a.get("wappalyzer", []), tech_b.get("wappalyzer", [])),
+            "builtwith": diff_sets(tech_a.get("builtwith", []), tech_b.get("builtwith", [])),
+        },
         "quality": quality_diff,
-        "regressions": regressions,
-        "extra": extra,
+        "extractability": extract_diff,
     }
     return out
 
 
 def render_diff_md(diff: Dict[str, Any]) -> str:
     lines: List[str] = []
-    lines.append("# Diff report")
+    lines.append("# Inspector Diff (v0.4)\n")
+    lines.append(f"- Generated: **{diff.get('generated_at')}**")
+    lines.append(f"- Passed: **{diff.get('passed')}**")
+    if not diff.get("passed"):
+        lines.append(f"- Fail reasons: `{', '.join(diff.get('fail_reasons') or [])}`")
     lines.append("")
-    lines.append(f"- generated_at: `{diff.get('generated_at')}`")
-    lines.append(f"- passed: **{diff.get('passed')}**")
-    if diff.get("fail_reasons"):
+
+    a = diff.get("runA") or {}
+    b = diff.get("runB") or {}
+    lines.append("## Runs\n")
+    lines.append(f"- Run A: `{a.get('dir')}` — `{a.get('generated_at')}` — `{a.get('target_url')}`")
+    lines.append(f"- Run B: `{b.get('dir')}` — `{b.get('generated_at')}` — `{b.get('target_url')}`\n")
+
+    q = diff.get("quality") or {}
+    lines.append("## Quality\n")
+    if not q.get("available"):
+        lines.append("_Quality diff not available (missing quality in one run)._")
         lines.append("")
-        lines.append("## Fail reasons")
-        for r in diff.get("fail_reasons") or []:
-            lines.append(f"- {r}")
+    else:
+        summ = q.get("summary") or {}
+        lines.append(f"- RunA passed: `{summ.get('runA_passed')}` (failed pages: {summ.get('runA_pages_failed')})")
+        lines.append(f"- RunB passed: `{summ.get('runB_passed')}` (failed pages: {summ.get('runB_pages_failed')})")
+        regs = q.get("regressions") or []
+        lines.append(f"- Regressions: **{len(regs)}**")
+        if regs:
+            for r in regs[:25]:
+                lines.append(f"  - {r.get('url')}: {', '.join(r.get('reasons') or [])}")
+            if len(regs) > 25:
+                lines.append("  - … (truncated)")
+        lines.append("")
 
-    lines.append("")
-    lines.append("## Runs")
-    ra = diff.get("runA") or {}
-    rb = diff.get("runB") or {}
-    lines.append(f"- runA: `{ra.get('dir')}` ({ra.get('generated_at')}) target={ra.get('target_url')}")
-    lines.append(f"- runB: `{rb.get('dir')}` ({rb.get('generated_at')}) target={rb.get('target_url')}")
+    ex = diff.get("extractability")
+    if ex:
+        lines.append("## Extractability (JS disabled)\n")
+        lines.append(f"- RunA readable pages: `{ex.get('runA_js_disabled_readable')}`; not readable: `{ex.get('runA_js_disabled_not_readable')}`")
+        lines.append(f"- RunB readable pages: `{ex.get('runB_js_disabled_readable')}`; not readable: `{ex.get('runB_js_disabled_not_readable')}`")
+        lines.append("")
 
-    # Pages
+    tp = diff.get("third_parties") or {}
+    lines.append("## Third-party domains\n")
+    added = tp.get("added") or []
+    removed = tp.get("removed") or []
+    lines.append(f"- Added: **{len(added)}**")
+    for d in added[:30]:
+        lines.append(f"  - {d}")
+    if len(added) > 30:
+        lines.append("  - … (truncated)")
+    lines.append(f"- Removed: **{len(removed)}**")
+    for d in removed[:30]:
+        lines.append(f"  - {d}")
+    if len(removed) > 30:
+        lines.append("  - … (truncated)")
+    if tp.get("allowlist_used"):
+        dis = tp.get("disallowed_added") or []
+        lines.append(f"- Allowlist used: `true` (disallowed new: {len(dis)})")
     lines.append("")
-    lines.append("## Pages")
+
+    tech = diff.get("tech") or {}
+    lines.append("## Tech changes\n")
+    for src in ["wappalyzer", "builtwith"]:
+        t = tech.get(src) or {}
+        lines.append(f"### {src}")
+        lines.append(f"- Added: {len(t.get('added') or [])}")
+        for x in (t.get("added") or [])[:30]:
+            lines.append(f"  - {x}")
+        if len(t.get("added") or []) > 30:
+            lines.append("  - … (truncated)")
+        lines.append(f"- Removed: {len(t.get('removed') or [])}")
+        for x in (t.get("removed") or [])[:30]:
+            lines.append(f"  - {x}")
+        if len(t.get("removed") or []) > 30:
+            lines.append("  - … (truncated)")
+        lines.append("")
+
     pages = diff.get("pages") or {}
-    lines.append(f"- runA: {((pages.get('count') or {}).get('runA'))} pages")
-    lines.append(f"- runB: {((pages.get('count') or {}).get('runB'))} pages")
-    lines.append(f"- added: {len(pages.get('added') or [])}")
-    lines.append(f"- removed: {len(pages.get('removed') or [])}")
+    lines.append("## Pages\n")
+    lines.append(f"- Added: {len(pages.get('added') or [])}")
+    for u in (pages.get("added") or [])[:30]:
+        lines.append(f"  - {u}")
+    if len(pages.get("added") or []) > 30:
+        lines.append("  - … (truncated)")
+    lines.append(f"- Removed: {len(pages.get('removed') or [])}")
+    for u in (pages.get("removed") or [])[:30]:
+        lines.append(f"  - {u}")
+    if len(pages.get("removed") or []) > 30:
+        lines.append("  - … (truncated)")
 
-    # Third parties
     lines.append("")
-    lines.append("## Third-party domains")
-    tps = diff.get("third_parties") or {}
-    lines.append(f"- added: {len(tps.get('added') or [])}")
-    lines.append(f"- removed: {len(tps.get('removed') or [])}")
-    if tps.get("allowlist_used"):
-        dis = tps.get("disallowed_added") or []
-        lines.append(f"- allowlist used; disallowed added: {len(dis)}")
-
-    # Regressions
-    lines.append("")
-    lines.append("## Regressions")
-    reg = diff.get("regressions") or {}
-    items = reg.get("items") or []
-    lines.append(f"- count: {reg.get('count', 0)}")
-    for it in items[:50]:
-        lines.append(
-            f"- `{it.get('metric')}` {it.get('url')} : {it.get('runA')} → {it.get('runB')} (delta={it.get('delta')})"
-        )
-    if len(items) > 50:
-        lines.append(f"- ...and {len(items) - 50} more")
-
     return "\n".join(lines)

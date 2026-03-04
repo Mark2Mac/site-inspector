@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from .utils import _run, pct01_to_pct, safe_write, slugify_url_for_filename, which, now_iso
@@ -166,14 +167,24 @@ def evaluate_budget(lh_json: Dict[str, Any], budget: Dict[str, Any]) -> Dict[str
     return details
 
 
-def quality_for_urls(urls: List[str], *, out_dir: Path, timeout_s: int, budget: Dict[str, Any], max_pages: int) -> Dict[str, Any]:
+def quality_for_urls(
+    urls: List[str],
+    *,
+    out_dir: Path,
+    timeout_s: int,
+    budget: Dict[str, Any],
+    max_pages: int,
+    lighthouse_workers: int = 2,
+) -> Dict[str, Any]:
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     results: List[Dict[str, Any]] = []
     failures: List[Dict[str, Any]] = []
 
-    for url in urls[:max_pages]:
+    work_urls = urls[:max_pages]
+
+    def one(url: str) -> Dict[str, Any]:
         lh_run = run_lighthouse(url, out_dir=out_dir, timeout_s=timeout_s)
         lh_json = lh_run.get("lighthouse_json")
 
@@ -193,12 +204,37 @@ def quality_for_urls(urls: List[str], *, out_dir: Path, timeout_s: int, budget: 
             per_page["scores"] = extract_lighthouse_scores(lh_json)
             per_page["budget_eval"] = evaluate_budget(lh_json, budget)
 
-        results.append(per_page)
+        return per_page
 
-        # budget_eval can be None (e.g., lighthouse failed / returned non-json)
+    lw = max(1, int(lighthouse_workers))
+    lw = min(lw, 4)  # Lighthouse is heavy; keep concurrency low.
+
+    if lw == 1 or len(work_urls) <= 1:
+        for url in work_urls:
+            results.append(one(url))
+    else:
+        with ThreadPoolExecutor(max_workers=lw) as ex:
+            futs = {ex.submit(one, u): u for u in work_urls}
+            by_url: Dict[str, Dict[str, Any]] = {}
+            for fut, u in list(futs.items()):
+                try:
+                    by_url[u] = fut.result()
+                except Exception as e:
+                    by_url[u] = {
+                        "url": u,
+                        "artifacts": {"json_path": None, "html_path": None},
+                        "rc": None,
+                        "error": f"Lighthouse worker failed: {e}",
+                        "scores": None,
+                        "budget_eval": None,
+                    }
+            for u in work_urls:
+                results.append(by_url[u])
+
+    for per_page in results:
         budget_eval = per_page.get("budget_eval") or {}
         if not budget_eval.get("passed", True):
-            failures.append({"url": url, "why": per_page["budget_eval"]})
+            failures.append({"url": per_page.get("url"), "why": per_page.get("budget_eval")})
 
     summary = {
         "generated_at": now_iso(),
@@ -206,6 +242,7 @@ def quality_for_urls(urls: List[str], *, out_dir: Path, timeout_s: int, budget: 
         "pages_failed": len(failures),
         "passed": len(failures) == 0,
         "budget": budget,
+        "lighthouse_workers": lw,
         "results": results,
         "failures": failures,
     }

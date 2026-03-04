@@ -1,79 +1,71 @@
 # Site Inspector
 
-Site Inspector is a CLI tool to audit websites and generate structured reports about:
+Site Inspector is a Windows-first CLI tool to audit websites and generate structured artifacts and reports:
 
-- Site structure
-- Technologies used
-- Lighthouse performance metrics
-- JavaScript-rendered content (Playwright)
-- Differences between site snapshots
+- Crawl (page discovery)
+- Posture (headers / TLS / DNS / tech fingerprinting / third parties)
+- Quality (Lighthouse + budgets)
+- JS Rendering (Playwright artifacts)
+- Diff (regressions between two runs)
 
-The project is currently **Windows-first** and optimized for developer workflows.
+## Quick start
 
----
-
-# Core Commands
-
-Run full audit:
-
+### Full run
+```powershell
 python site_audit.py run https://example.com
+```
 
-Render JS with browser:
+### Crawl only (now concurrent)
+```powershell
+python site_audit.py crawl https://example.com --max-pages 200 --crawl-workers 16
+```
 
-python site_audit.py playwright https://example.com
+### Lighthouse quality (heavy; keep workers low)
+```powershell
+python site_audit.py quality https://example.com --max-pages 50 --lighthouse-workers 2
+```
 
-Compare two runs:
+### Playwright artifacts
+```powershell
+python site_audit.py playwright https://example.com --max-pages 10
+```
 
-python site_audit.py diff runs/runA runs/runB --out diffs/result
+### Diff two runs
+```powershell
+python site_audit.py diff runs\\runA runs\\runB --out diffs\\runA_vs_runB
+```
 
----
+## Outputs
 
-# Output Structure
+A run produces:
 
+```
 inspect_<host>_<timestamp>/
+  run.json
+  run.md
+  pages.json
+  posture.json
+  quality_summary.json (when quality enabled)
+  lighthouse/
+  playwright/
+  raw/
+```
 
-    run.json
-    run.md
-    pages.json
-    posture.json
-    lighthouse/
-    playwright/
-    raw/
+## Architecture
 
----
+`site_audit.py` is the stable entrypoint.
 
-# Architecture
+Modules live in `site_inspector/`:
 
-site_audit.py – CLI entrypoint
+- `cli.py` – argparse + commands
+- `crawl.py` – sitemap + internal link discovery (**now concurrent**)
+- `posture.py` – tech/headers/TLS/DNS/meta/third parties
+- `lighthouse.py` – Lighthouse runner + budgets (**now supports worker cap**)
+- `playwright_audit.py` – Playwright artifacts
+- `diffing.py` – run diff + regression detection + Markdown renderer
+- `reporting.py` – Markdown report generation
+- `utils.py` – helpers (safe I/O, subprocess, URL utils)
 
-site_inspector/
+## Scalability roadmap
 
-    cli.py
-    crawl.py
-    posture.py
-    lighthouse.py
-    playwright_audit.py
-    diffing.py
-    reporting.py
-    utils.py
-
----
-
-# Verified Pipeline
-
-The following workflow has been validated:
-
-python site_audit.py run
-python site_audit.py playwright
-python site_audit.py run --out runs/runA
-python site_audit.py run --out runs/runB
-python site_audit.py diff runs/runA runs/runB
-
----
-
-# Project Goals
-
-- deterministic runs
-- reproducible artifacts
-- CI-friendly
-- scalable architecture
+See `ROADMAP_VERBOSE.md`.

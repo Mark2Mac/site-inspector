@@ -1,4 +1,4 @@
-# Python
+# Python caches
 __pycache__/
 *.pyc
 *.pyo
@@ -7,14 +7,14 @@ __pycache__/
 .venv/
 venv/
 
-# Node
+# Node artifacts
 node_modules/
 
-# OS
+# OS junk
 .DS_Store
 Thumbs.db
 
-# Tool outputs
+# Tool outputs (can be huge)
 runs/
 diffs/
 inspect_*/

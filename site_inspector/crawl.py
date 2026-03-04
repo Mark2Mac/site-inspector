@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import shutil
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+import itertools
+import threading
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -62,7 +65,14 @@ def parse_sitemap_xml(xml_text: str) -> List[str]:
     return urls
 
 
-def discover_pages(target_url: str, *, max_pages: int, timeout_s: int, out_dir: Path) -> Dict[str, Any]:
+def discover_pages(
+    target_url: str,
+    *,
+    max_pages: int,
+    timeout_s: int,
+    out_dir: Path,
+    crawl_workers: int = 8,
+) -> Dict[str, Any]:
     host = host_from_url(target_url)
 
     pages: List[Dict[str, Any]] = []
@@ -97,28 +107,57 @@ def discover_pages(target_url: str, *, max_pages: int, timeout_s: int, out_dir: 
                 discovered.append(u)
 
     visited = set(discovered)
-    q = deque([target_url])
+
+    # Work queue for link discovery (BFS-ish). We keep ordering roughly stable
+    # by pushing newly discovered links to the right.
+    q: deque[str] = deque([target_url])
     if target_url not in visited:
         visited.add(target_url)
         discovered.insert(0, target_url)
 
-    while q and len(discovered) < max_pages:
-        current = q.popleft()
-        links_data = run_inner(py, tmp_root, "links", current, timeout_s, raw_dir, f"links_{len(discovered):03d}")
-        out_links = links_data.get("links") or []
-        for u in out_links:
-            u = clean_url(u)
-            if u in visited:
-                continue
-            if not is_same_host(u, host):
-                continue
-            if not looks_like_html_path(u):
-                continue
-            visited.add(u)
-            discovered.append(u)
-            q.append(u)
-            if len(discovered) >= max_pages:
-                break
+    lock = threading.Lock()
+    task_id = itertools.count(1)
+
+    def worker() -> None:
+        while True:
+            with lock:
+                if len(discovered) >= max_pages:
+                    return
+                if not q:
+                    return
+                current = q.popleft()
+                tid = next(task_id)
+
+            links_data = run_inner(py, tmp_root, "links", current, timeout_s, raw_dir, f"links_{tid:06d}")
+            out_links = links_data.get("links") or []
+
+            new_urls: List[str] = []
+            for u in out_links:
+                u = clean_url(u)
+                if not u:
+                    continue
+                if not is_same_host(u, host):
+                    continue
+                if not looks_like_html_path(u):
+                    continue
+                with lock:
+                    if u in visited or len(discovered) >= max_pages:
+                        continue
+                    visited.add(u)
+                    discovered.append(u)
+                    new_urls.append(u)
+
+            if new_urls:
+                with lock:
+                    q.extend(new_urls)
+
+    # Cap workers to something sane; each task spawns a subprocess.
+    cw = max(1, int(crawl_workers))
+    cw = min(cw, 32)
+    with ThreadPoolExecutor(max_workers=cw) as ex:
+        futures = [ex.submit(worker) for _ in range(cw)]
+        for f in futures:
+            f.result()
 
     for u in discovered[:max_pages]:
         pages.append({"url": u})
@@ -133,6 +172,7 @@ def discover_pages(target_url: str, *, max_pages: int, timeout_s: int, out_dir: 
             "sitemap_used": bool(sitemap_text),
             "fallback_bfs": True,
             "max_pages": max_pages,
+            "crawl_workers": cw,
         },
         "pages": pages,
     }
