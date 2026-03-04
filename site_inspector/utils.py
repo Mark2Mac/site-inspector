@@ -53,13 +53,14 @@ import ssl
 import subprocess
 import sys
 import tempfile
-import hashlib
 import urllib.parse
 import xml.etree.ElementTree as ET
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+import hashlib
 
 
 # -----------------------------
@@ -140,7 +141,7 @@ def normalize_target(target: str) -> str:
     parsed = urllib.parse.urlparse(target)
     if not parsed.netloc:
         raise ValueError(f"Invalid URL: {target}")
-    return parsed._replace(fragment="").geturl()
+    return clean_url(parsed._replace(fragment="").geturl())
 
 
 def host_from_url(url: str) -> str:
@@ -159,10 +160,74 @@ def is_same_host(url: str, host: str) -> bool:
         return False
 
 
-def clean_url(url: str) -> str:
-    p = urllib.parse.urlparse(url)
-    return p._replace(fragment="").geturl()
+# Query params that are almost always tracking and safe to drop for dedupe.
+_TRACKING_QUERY_KEYS = {
+    "gclid", "fbclid", "msclkid", "dclid", "yclid",
+    "_ga", "_gl", "gbraid", "wbraid",
+    "mc_cid", "mc_eid",
+}
 
+def clean_url(url: str) -> str:
+    """Best-effort URL cleanup for crawl dedupe.
+
+    Guardrails:
+    - never removes path segments
+    - never removes non-tracking query params (keeps functional params like ?page=2)
+    - removes fragment
+    - strips common tracking params (utm_*, gclid, fbclid, ...)
+    - lowercases scheme + host; removes default ports; sorts query params
+    """
+    try:
+        p = urllib.parse.urlparse(url)
+    except Exception:
+        return url
+
+    if not p.scheme or not p.netloc:
+        # likely relative or malformed; return as-is and let upstream handle it
+        return url
+
+    # Normalize scheme + host casing
+    scheme = (p.scheme or "").lower()
+
+    # netloc may include userinfo and port
+    username = p.username or ""
+    password = p.password or ""
+    hostname = (p.hostname or "").lower()
+    port = p.port
+
+    # Remove default ports
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        port = None
+
+    userinfo = ""
+    if username:
+        userinfo = username
+        if password:
+            userinfo += f":{password}"
+        userinfo += "@"
+
+    netloc = hostname
+    if port:
+        netloc = f"{netloc}:{port}"
+    netloc = userinfo + netloc
+
+    # Drop fragments
+    fragment = ""
+
+    # Filter + sort query params (keep blanks, keep repeats)
+    q = []
+    try:
+        for k, v in urllib.parse.parse_qsl(p.query or "", keep_blank_values=True):
+            kl = (k or "").lower()
+            if kl.startswith("utm_") or kl in _TRACKING_QUERY_KEYS:
+                continue
+            q.append((k, v))
+        q.sort(key=lambda kv: (kv[0], kv[1]))
+        query = urllib.parse.urlencode(q, doseq=True)
+    except Exception:
+        query = p.query or ""
+
+    return urllib.parse.urlunparse((scheme, netloc, p.path or "", p.params or "", query, fragment)).strip()
 
 def looks_like_html_path(url: str) -> bool:
     p = urllib.parse.urlparse(url)
@@ -189,6 +254,20 @@ def slugify_url_for_filename(url: str) -> str:
     return slug[:180]
 
 
+def stable_page_id(url: str) -> str:
+    """Deterministic, filesystem-safe id for a page.
+
+    Used for per-page caching under raw/pages/<id>/.
+    We hash the *cleaned* URL so tracking params/fragments don't create duplicates.
+    """
+    u = clean_url(url)
+    try:
+        b = u.encode("utf-8", errors="ignore")
+    except Exception:
+        b = str(u).encode("utf-8", errors="ignore")
+    return hashlib.sha1(b).hexdigest()[:16]
+
+
 def which(exe: str) -> Optional[str]:
     paths = os.environ.get("PATH", "").split(os.pathsep)
     exts = [""] if "." in exe else [".exe", ".cmd", ".bat", ""]
@@ -210,15 +289,6 @@ def pct01_to_pct(x: Optional[float]) -> Optional[int]:
         return int(round(float(x) * 100))
     except Exception:
         return None
-
-
-def stable_page_id(url: str) -> str:
-    """Stable, filesystem-friendly id for a page URL.
-
-    Used for per-page caching under raw/pages/<id>/.
-    """
-    u = clean_url(url).encode("utf-8", errors="ignore")
-    return hashlib.sha1(u).hexdigest()[:12]
 
 
 # -----------------------------
