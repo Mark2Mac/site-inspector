@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import shutil
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor
-import itertools
 import threading
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set, Tuple
+
+import xml.etree.ElementTree as ET
 
 from .inner_collectors import make_temp_venv, run_inner
 from .utils import (
@@ -18,10 +19,9 @@ from .utils import (
     now_iso,
     safe_write,
 )
-import xml.etree.ElementTree as ET
 
 
-# Crawl: sitemap first, then fallback BFS
+# Crawl: sitemap first, then concurrent BFS
 # -----------------------------
 
 def parse_sitemap_xml(xml_text: str) -> List[str]:
@@ -71,17 +71,27 @@ def discover_pages(
     max_pages: int,
     timeout_s: int,
     out_dir: Path,
-    crawl_workers: int = 8,
+    workers: int = 8,
+    **_ignored: object,
 ) -> Dict[str, Any]:
+    """
+    Discover internal HTML pages.
+    Scale-A version: concurrent link discovery with bounded worker pool.
+    """
     host = host_from_url(target_url)
+
+    # Clamp workers (this still spawns subprocesses; don't go insane)
+    cw = max(1, min(32, int(workers)))
+
+    raw_dir = out_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
 
     pages: List[Dict[str, Any]] = []
     discovered: List[str] = []
 
     tmp_root, py, pip = make_temp_venv()
-    raw_dir = out_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
 
+    # Install deps once (shared by all workers)
     deps = [
         "requests>=2.31.0",
         "beautifulsoup4>=4.12.0",
@@ -93,76 +103,105 @@ def discover_pages(
     safe_write(raw_dir / "pip_install.stdout.txt", so)
     safe_write(raw_dir / "pip_install.stderr.txt", se)
 
+    # Seed posture: try to read sitemap
     base_posture = run_inner(py, tmp_root, "posture", target_url, timeout_s, raw_dir, "posture_seed")
     sitemap_text = None
     sm = (base_posture.get("sitemap_xml") or {})
-    if sm and isinstance(sm, dict):
+    if isinstance(sm, dict):
         sitemap_text = sm.get("text")
 
     if sitemap_text:
-        sitemap_urls = parse_sitemap_xml(sitemap_text)
-        for u in sitemap_urls:
+        for u in parse_sitemap_xml(sitemap_text):
             u = clean_url(u)
             if is_same_host(u, host) and looks_like_html_path(u):
                 discovered.append(u)
 
-    visited = set(discovered)
+    # Concurrent BFS
+    visited: Set[str] = set(discovered)
+    q: deque[str] = deque()
 
-    # Work queue for link discovery (BFS-ish). We keep ordering roughly stable
-    # by pushing newly discovered links to the right.
-    q: deque[str] = deque([target_url])
+    # Always include target first
     if target_url not in visited:
         visited.add(target_url)
         discovered.insert(0, target_url)
+    q.append(target_url)
 
     lock = threading.Lock()
-    task_id = itertools.count(1)
+    counter = {"i": 0}
 
-    def worker() -> None:
-        while True:
-            with lock:
-                if len(discovered) >= max_pages:
-                    return
-                if not q:
-                    return
-                current = q.popleft()
-                tid = next(task_id)
+    def _next_tag() -> str:
+        with lock:
+            counter["i"] += 1
+            return f"links_{counter['i']:05d}"
 
-            links_data = run_inner(py, tmp_root, "links", current, timeout_s, raw_dir, f"links_{tid:06d}")
-            out_links = links_data.get("links") or []
+    def _fetch_links(url: str) -> Tuple[str, List[str]]:
+        tag = _next_tag()
+        data = run_inner(py, tmp_root, "links", url, timeout_s, raw_dir, tag)
+        out_links = data.get("links") or []
+        cleaned: List[str] = []
+        for u in out_links:
+            u = clean_url(u)
+            if not u:
+                continue
+            cleaned.append(u)
+        return url, cleaned
 
-            new_urls: List[str] = []
-            for u in out_links:
-                u = clean_url(u)
-                if not u:
+    in_flight = set()
+    futures = {}
+
+    try:
+        with ThreadPoolExecutor(max_workers=cw) as ex:
+            # Prime workers from queue
+            while q and len(discovered) < max_pages and len(futures) < cw:
+                u = q.popleft()
+                if u in in_flight:
                     continue
-                if not is_same_host(u, host):
-                    continue
-                if not looks_like_html_path(u):
-                    continue
-                with lock:
-                    if u in visited or len(discovered) >= max_pages:
+                in_flight.add(u)
+                fut = ex.submit(_fetch_links, u)
+                futures[fut] = u
+
+            while futures and len(discovered) < max_pages:
+                done, _ = wait(list(futures.keys()), return_when=FIRST_COMPLETED)
+                for fut in done:
+                    src = futures.pop(fut, None)
+                    if src:
+                        in_flight.discard(src)
+
+                    try:
+                        _, links = fut.result()
+                    except Exception:
+                        # If one page fails, continue (scalability-friendly)
+                        links = []
+
+                    # Add new candidates
+                    for u in links:
+                        if len(discovered) >= max_pages:
+                            break
+                        if not is_same_host(u, host):
+                            continue
+                        if not looks_like_html_path(u):
+                            continue
+                        with lock:
+                            if u in visited:
+                                continue
+                            visited.add(u)
+                            discovered.append(u)
+                            q.append(u)
+
+                # Refill workers
+                while q and len(discovered) < max_pages and len(futures) < cw:
+                    u = q.popleft()
+                    if u in in_flight:
                         continue
-                    visited.add(u)
-                    discovered.append(u)
-                    new_urls.append(u)
+                    in_flight.add(u)
+                    fut = ex.submit(_fetch_links, u)
+                    futures[fut] = u
 
-            if new_urls:
-                with lock:
-                    q.extend(new_urls)
-
-    # Cap workers to something sane; each task spawns a subprocess.
-    cw = max(1, int(crawl_workers))
-    cw = min(cw, 32)
-    with ThreadPoolExecutor(max_workers=cw) as ex:
-        futures = [ex.submit(worker) for _ in range(cw)]
-        for f in futures:
-            f.result()
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
 
     for u in discovered[:max_pages]:
         pages.append({"url": u})
-
-    shutil.rmtree(tmp_root, ignore_errors=True)
 
     return {
         "target_url": target_url,
@@ -170,9 +209,9 @@ def discover_pages(
         "generated_at": now_iso(),
         "method": {
             "sitemap_used": bool(sitemap_text),
-            "fallback_bfs": True,
+            "concurrent_bfs": True,
             "max_pages": max_pages,
-            "crawl_workers": cw,
+            "workers": cw,
         },
         "pages": pages,
     }

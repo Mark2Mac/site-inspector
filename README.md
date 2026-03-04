@@ -1,12 +1,29 @@
 # Site Inspector
 
-Site Inspector is a Windows-first CLI tool to audit websites and generate structured artifacts and reports:
+Windows-first CLI tool to audit websites and generate reproducible artifacts:
 
-- Crawl (page discovery)
-- Posture (headers / TLS / DNS / tech fingerprinting / third parties)
-- Quality (Lighthouse + budgets)
-- JS Rendering (Playwright artifacts)
-- Diff (regressions between two runs)
+- **crawl**: page discovery (sitemap + internal links)
+- **posture**: headers / TLS / DNS / tech fingerprinting / third parties
+- **quality**: Lighthouse + budgets
+- **playwright**: JS-rendered artifacts (DOM/screenshot/network)
+- **run**: orchestrates crawl → posture → quality → (optional) playwright
+- **diff**: compare two runs and report regressions
+
+## Status (today)
+
+✅ End-to-end pipeline verified on Windows:
+
+- `run` generates `run.json` + `run.md`
+- `playwright` generates `playwright_summary.json`
+- `diff` generates `diff.json` + `diff.md`
+
+✅ Scale-A groundwork implemented:
+
+- Concurrent crawl worker support (`--crawl-workers`)
+- Lighthouse concurrency control (`--lighthouse-workers`)
+- Windows-safe subprocess execution for Node wrappers (npx.cmd)
+- UTF-8 safe subprocess output capture
+- CLI/module arg compatibility hardening (aliases + safe defaults)
 
 ## Quick start
 
@@ -15,27 +32,29 @@ Site Inspector is a Windows-first CLI tool to audit websites and generate struct
 python site_audit.py run https://example.com
 ```
 
-### Crawl only (now concurrent)
+### Fast crawl (up to ~500 pages)
 ```powershell
-python site_audit.py crawl https://example.com --max-pages 200 --crawl-workers 16
+python site_audit.py crawl https://example.com --max-pages 300 --crawl-workers 16
 ```
 
-### Lighthouse quality (heavy; keep workers low)
+### Quality audit (heavy — keep workers low)
 ```powershell
-python site_audit.py quality https://example.com --max-pages 50 --lighthouse-workers 2
+python site_audit.py quality https://example.com --max-pages 30 --crawl-workers 16 --lighthouse-workers 2
 ```
 
-### Playwright artifacts
+### JS rendering (Playwright)
 ```powershell
 python site_audit.py playwright https://example.com --max-pages 10
 ```
 
 ### Diff two runs
 ```powershell
-python site_audit.py diff runs\\runA runs\\runB --out diffs\\runA_vs_runB
+python site_audit.py run https://example.com --skip-playwright --out runs\runA
+python site_audit.py run https://example.com --skip-playwright --out runs\runB
+python site_audit.py diff runs\runA runs\runB --out diffs\runA_vs_runB
 ```
 
-## Outputs
+## Output structure
 
 A run produces:
 
@@ -45,10 +64,17 @@ inspect_<host>_<timestamp>/
   run.md
   pages.json
   posture.json
-  quality_summary.json (when quality enabled)
   lighthouse/
   playwright/
   raw/
+```
+
+Diff produces:
+
+```
+diffs/<name>/
+  diff.json
+  diff.md
 ```
 
 ## Architecture
@@ -57,15 +83,16 @@ inspect_<host>_<timestamp>/
 
 Modules live in `site_inspector/`:
 
-- `cli.py` – argparse + commands
-- `crawl.py` – sitemap + internal link discovery (**now concurrent**)
-- `posture.py` – tech/headers/TLS/DNS/meta/third parties
-- `lighthouse.py` – Lighthouse runner + budgets (**now supports worker cap**)
+- `cli.py` – CLI + commands
+- `crawl.py` – page discovery (concurrent)
+- `posture.py` – posture collection
+- `lighthouse.py` – Lighthouse runner + budget eval (worker cap + arg alias)
 - `playwright_audit.py` – Playwright artifacts
-- `diffing.py` – run diff + regression detection + Markdown renderer
-- `reporting.py` – Markdown report generation
-- `utils.py` – helpers (safe I/O, subprocess, URL utils)
+- `diffing.py` – diff engine + Markdown renderer
+- `reporting.py` – run report generation
+- `utils.py` – shared helpers
+- `inner_collectors.py` – isolated venv runner for collectors
 
-## Scalability roadmap
+## Roadmap
 
-See `ROADMAP_VERBOSE.md`.
+See **ROADMAP_VERBOSE.md** for the detailed plan and next steps.

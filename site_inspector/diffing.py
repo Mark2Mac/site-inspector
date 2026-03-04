@@ -145,7 +145,7 @@ def diff_quality(run_a: Dict[str, Any], run_b: Dict[str, Any], *, score_regressi
     return out
 
 
-def diff_runs(run_a: Dict[str, Any], run_b: Dict[str, Any], *, allow_new_third_parties: Optional[List[str]], score_regression_threshold: float) -> Dict[str, Any]:
+def diff_runs(run_a: Dict[str, Any], run_b: Dict[str, Any], *, allow_new_third_parties: Optional[List[str]] = None, score_regression_threshold: float = 0.05) -> Dict[str, Any]:
     pages_a = list_pages_from_run(run_a)
     pages_b = list_pages_from_run(run_b)
 

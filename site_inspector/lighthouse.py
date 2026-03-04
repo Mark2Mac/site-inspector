@@ -175,7 +175,11 @@ def quality_for_urls(
     budget: Dict[str, Any],
     max_pages: int,
     lighthouse_workers: int = 2,
+    workers: int | None = None,
+    **_ignored: object,
 ) -> Dict[str, Any]:
+    if workers is not None:
+        lighthouse_workers = workers
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
