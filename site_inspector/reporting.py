@@ -12,7 +12,9 @@ def build_run_md(run: Dict[str, Any]) -> str:
     host = run.get("host")
 
     lines: List[str] = []
-    lines.append("# Inspector Run (v0.4)\n")
+    lines.append("# Inspector Run\n")
+    if run.get("version"):
+        lines.append(f"- Version: **{run.get('version')}**")
     lines.append(f"- Target: **{url}**")
     lines.append(f"- Host: **{host}**")
     lines.append(f"- Generated: **{run.get('generated_at')}**\n")
@@ -25,11 +27,24 @@ def build_run_md(run: Dict[str, Any]) -> str:
         lines.append(f"- Pages discovered: **{len(pages)}**")
         lines.append(f"- Used sitemap: `{method.get('sitemap_used')}`")
         lines.append(f"- Max pages: `{method.get('max_pages')}`\n")
+        errs = crawl.get("errors") or []
+        lines.append(f"- Crawl errors: **{len(errs)}**\n")
         for p in pages[:50]:
             lines.append(f"- {p.get('url')}")
         if len(pages) > 50:
             lines.append("- … (truncated)")
         lines.append("")
+        errs = crawl.get("errors") or []
+        if errs:
+            lines.append("### Crawl errors (first 20)\n")
+            for e in errs[:20]:
+                u = e.get("url")
+                sc = e.get("status_code")
+                msg = e.get("error")
+                lines.append(f"- `{sc}` {u} — {msg}")
+            if len(errs) > 20:
+                lines.append("- … (truncated)")
+            lines.append("")
 
     posture = run.get("posture")
     if posture:

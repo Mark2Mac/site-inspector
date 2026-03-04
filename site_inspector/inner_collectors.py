@@ -24,6 +24,8 @@ from collections import defaultdict
 
 import requests
 from bs4 import BeautifulSoup
+import time
+import random
 
 try:
     from Wappalyzer import Wappalyzer, WebPage
@@ -51,13 +53,44 @@ def get_base(url: str) -> str:
 def host_from_url(url: str) -> str:
     return urllib.parse.urlparse(url).netloc.split("@")[-1].split(":")[0]
 
-def fetch(url: str, timeout: int = 20):
-    return requests.get(
-        url,
-        timeout=timeout,
-        headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
-        allow_redirects=True,
-    )
+def fetch(url: str, timeout: int = 20, *, attempts: int = 3):
+    # HTTP GET with small retry/backoff to reduce flakiness on 429/5xx/timeouts.
+    last_exc = None
+    for i in range(max(1, int(attempts))):
+        try:
+            r = requests.get(
+                url,
+                timeout=timeout,
+                headers={
+                    "User-Agent": UA,
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                },
+                allow_redirects=True,
+            )
+            # Retry on transient statuses
+            if r.status_code in (429, 500, 502, 503, 504) and i < attempts - 1:
+                # Respect Retry-After if present
+                ra = r.headers.get("Retry-After")
+                sleep_s = None
+                if ra:
+                    try:
+                        sleep_s = float(ra.strip())
+                    except Exception:
+                        sleep_s = None
+                if sleep_s is None:
+                    sleep_s = (0.5 * (2 ** i)) + random.random() * 0.25
+                time.sleep(min(8.0, max(0.0, sleep_s)))
+                continue
+            return r
+        except Exception as e:
+            last_exc = e
+            if i < attempts - 1:
+                sleep_s = (0.5 * (2 ** i)) + random.random() * 0.25
+                time.sleep(min(8.0, max(0.0, sleep_s)))
+                continue
+            raise
+    # should never hit
+    raise last_exc
 
 def extract_third_party_domains(soup: BeautifulSoup, base_host: str):
     domains = set()

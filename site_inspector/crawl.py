@@ -83,6 +83,12 @@ def discover_pages(
     # Clamp workers (this still spawns subprocesses; don't go insane)
     cw = max(1, min(32, int(workers)))
 
+    
+    # Per-host in-flight limiter (prevents self-inflicted 429s when crawl-workers is high)
+    host_inflight_limit = max(1, min(8, cw // 2 or 1))
+    host_sem = threading.Semaphore(host_inflight_limit)
+
+    crawl_errors: List[Dict[str, Any]] = []
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
@@ -134,9 +140,14 @@ def discover_pages(
             counter["i"] += 1
             return f"links_{counter['i']:05d}"
 
-    def _fetch_links(url: str) -> Tuple[str, List[str]]:
+    def _fetch_links(url: str) -> Tuple[str, List[str], int | None, str | None]:
         tag = _next_tag()
-        data = run_inner(py, tmp_root, "links", url, timeout_s, raw_dir, tag)
+        host_sem.acquire()
+        try:
+            data = run_inner(py, tmp_root, "links", url, timeout_s, raw_dir, tag)
+        finally:
+            host_sem.release()
+
         out_links = data.get("links") or []
         cleaned: List[str] = []
         for u in out_links:
@@ -144,7 +155,10 @@ def discover_pages(
             if not u:
                 continue
             cleaned.append(u)
-        return url, cleaned
+
+        status = data.get("status_code")
+        err = data.get("error") or None
+        return url, cleaned, status, err
 
     in_flight = set()
     futures = {}
@@ -168,9 +182,12 @@ def discover_pages(
                         in_flight.discard(src)
 
                     try:
-                        _, links = fut.result()
-                    except Exception:
+                        _, links, status, err = fut.result()
+                        if err:
+                            crawl_errors.append({"url": src or "", "stage": "links", "error": err, "status_code": status})
+                    except Exception as e:
                         # If one page fails, continue (scalability-friendly)
+                        crawl_errors.append({"url": src or "", "stage": "links", "error": str(e), "status_code": None})
                         links = []
 
                     # Add new candidates
@@ -212,6 +229,8 @@ def discover_pages(
             "concurrent_bfs": True,
             "max_pages": max_pages,
             "workers": cw,
+            "host_inflight_limit": host_inflight_limit,
         },
+        "errors": crawl_errors,
         "pages": pages,
     }
