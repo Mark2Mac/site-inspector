@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import concurrent.futures
 import os
 import platform
 from pathlib import Path
@@ -292,16 +293,37 @@ def run_playwright_for_url(url: str, *, out_dir: Path, timeout_s: int, cache_dir
     return summary
 
 
-def playwright_for_urls(urls: List[str], *, out_dir: Path, timeout_s: int, max_pages: int) -> Dict[str, Any]:
+def playwright_for_urls(urls: List[str], *, out_dir: Path, timeout_s: int, max_pages: int, workers: int = 1) -> Dict[str, Any]:
     cache_dir = out_dir / ".cache" / "playwright"
     results: List[Dict[str, Any]] = []
     failures: List[Dict[str, Any]] = []
 
-    for url in urls[:max_pages]:
-        r = run_playwright_for_url(url, out_dir=out_dir, timeout_s=timeout_s, cache_dir=cache_dir)
-        results.append(r)
-        if r.get("rc") not in (0, None) or r.get("error"):
-            failures.append({"url": url, "error": r.get("error"), "rc": r.get("rc")})
+    work_urls = urls[:max_pages]
+
+    if workers is None or workers < 1:
+        workers = 1
+
+    if workers == 1 or len(work_urls) <= 1:
+        for url in work_urls:
+            r = run_playwright_for_url(url, out_dir=out_dir, timeout_s=timeout_s, cache_dir=cache_dir)
+            results.append(r)
+            if r.get("rc") not in (0, None) or r.get("error"):
+                failures.append({"url": url, "error": r.get("error"), "rc": r.get("rc")})
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {
+                ex.submit(run_playwright_for_url, url, out_dir=out_dir, timeout_s=timeout_s, cache_dir=cache_dir): url
+                for url in work_urls
+            }
+            for fut in concurrent.futures.as_completed(futs):
+                url = futs[fut]
+                try:
+                    r = fut.result()
+                except Exception as e:
+                    r = {"url": url, "error": str(e), "rc": 1}
+                results.append(r)
+                if r.get("rc") not in (0, None) or r.get("error"):
+                    failures.append({"url": url, "error": r.get("error"), "rc": r.get("rc")})
 
     # Extractability rollup
     extract = {

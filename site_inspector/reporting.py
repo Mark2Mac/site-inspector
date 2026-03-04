@@ -19,6 +19,21 @@ def build_run_md(run: Dict[str, Any]) -> str:
     lines.append(f"- Host: **{host}**")
     lines.append(f"- Generated: **{run.get('generated_at')}**\n")
 
+    timings = run.get("timings") or {}
+    if timings:
+        lines.append("## Timing\n")
+        # keep order
+        for k, label in [
+            ("crawl_s", "Crawl"),
+            ("posture_s", "Posture"),
+            ("lighthouse_s", "Lighthouse"),
+            ("playwright_s", "Playwright"),
+            ("total_s", "Total"),
+        ]:
+            if k in timings and timings.get(k) is not None:
+                lines.append(f"- {label}: **{timings.get(k)}s**")
+        lines.append("")
+
     crawl = run.get("crawl")
     if crawl:
         lines.append("## Crawl\n")
