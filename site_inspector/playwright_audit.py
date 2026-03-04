@@ -163,6 +163,21 @@ main().catch((e) => {
 """
 
 
+def ensure_npx_available() -> None:
+    """Ensure npx is available on PATH (Windows-friendly)."""
+    if (which("npx") or which("npx.cmd") or which("npx.exe")) is None:
+        raise RuntimeError("npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal.")
+
+
+
+def _build_windows_cmd_for_exe(exe_path: str, args: List[str]) -> List[str]:
+    """Build a subprocess command that works on Windows for .cmd/.bat wrappers."""
+    exe_lower = exe_path.lower()
+    if platform.system().lower().startswith('win') and (exe_lower.endswith('.cmd') or exe_lower.endswith('.bat')):
+        # Use cmd.exe to execute batch wrappers reliably with shell=False
+        return ["cmd", "/c", exe_path, *args]
+    return [exe_path, *args]
+
 def ensure_node_available() -> None:
     if which("node") is None:
         raise RuntimeError("node not found in PATH. Install Node.js and restart your terminal.")

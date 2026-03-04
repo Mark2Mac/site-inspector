@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .utils import _run, pct01_to_pct, safe_write, slugify_url_for_filename, which
+from .utils import _run, pct01_to_pct, safe_write, slugify_url_for_filename, which, now_iso
 
 
 # -----------------------------
@@ -195,7 +195,9 @@ def quality_for_urls(urls: List[str], *, out_dir: Path, timeout_s: int, budget: 
 
         results.append(per_page)
 
-        if not per_page.get("budget_eval", {}).get("passed", True):
+        # budget_eval can be None (e.g., lighthouse failed / returned non-json)
+        budget_eval = per_page.get("budget_eval") or {}
+        if not budget_eval.get("passed", True):
             failures.append({"url": url, "why": per_page["budget_eval"]})
 
     summary = {

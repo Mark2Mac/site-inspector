@@ -70,7 +70,19 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
-def _run(cmd: List[str], *, cwd: Optional[str] = None, env: Optional[Dict[str, str]] = None, timeout: int = 300) -> Tuple[int, str, str]:
+def _run(
+    cmd: List[str],
+    *,
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+    timeout: int = 300,
+) -> Tuple[int, str, str]:
+    """Run a subprocess and capture output.
+
+    Windows note: Node/Playwright/Lighthouse often emit mixed encodings.
+    Using the system default codec (often cp1252) can crash with UnicodeDecodeError.
+    Force UTF-8 decoding with replacement to keep the CLI resilient.
+    """
     p = subprocess.run(
         cmd,
         cwd=cwd,
@@ -78,15 +90,19 @@ def _run(cmd: List[str], *, cwd: Optional[str] = None, env: Optional[Dict[str, s
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         shell=False,
     )
-    return p.returncode, p.stdout, p.stderr
+    so = p.stdout if isinstance(p.stdout, str) else ""
+    se = p.stderr if isinstance(p.stderr, str) else ""
+    return p.returncode, so, se
 
 
-def safe_write(path: Path, content: str) -> None:
+def safe_write(path: Path, content: Optional[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content or "", encoding="utf-8")
 
 
 def safe_write_bytes(path: Path, data: bytes) -> None:

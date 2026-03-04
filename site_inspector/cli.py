@@ -13,7 +13,7 @@ from .lighthouse import quality_for_urls
 from .playwright_audit import playwright_for_urls
 from .posture import collect_posture
 from .reporting import build_run_md
-from .utils import load_json_if_exists, normalize_target, safe_write_json, host_from_url
+from .utils import load_json_if_exists, normalize_target, safe_write, safe_write_json, now_iso, host_from_url
 
 
 # -----------------------------
