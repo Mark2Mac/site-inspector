@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+import json
+import platform
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from .utils import _run, safe_write
+
+
+# -----------------------------
+# Inner collector (runs in temp venv) — posture + link extraction
+# -----------------------------
+
+INNER_SCRIPT = r"""
+import argparse
+import json
+import re
+import urllib.parse
+from collections import defaultdict
+
+import requests
+from bs4 import BeautifulSoup
+
+try:
+    from Wappalyzer import Wappalyzer, WebPage
+except Exception:
+    Wappalyzer = None
+    WebPage = None
+
+try:
+    import builtwith
+except Exception:
+    builtwith = None
+
+UA = "inspect/0.4 (+passive-tech-audit)"
+
+def normalize_url(url: str) -> str:
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", url):
+        url = "https://" + url
+    p = urllib.parse.urlparse(url)
+    return p._replace(fragment="").geturl()
+
+def get_base(url: str) -> str:
+    p = urllib.parse.urlparse(url)
+    return f"{p.scheme}://{p.netloc}"
+
+def host_from_url(url: str) -> str:
+    return urllib.parse.urlparse(url).netloc.split("@")[-1].split(":")[0]
+
+def fetch(url: str, timeout: int = 20):
+    return requests.get(
+        url,
+        timeout=timeout,
+        headers={"User-Agent": UA, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
+        allow_redirects=True,
+    )
+
+def extract_third_party_domains(soup: BeautifulSoup, base_host: str):
+    domains = set()
+    def add(u):
+        try:
+            p = urllib.parse.urlparse(u)
+            if p.netloc and p.netloc != base_host:
+                domains.add(p.netloc)
+        except Exception:
+            pass
+
+    for tag in soup.find_all(["script", "link", "img", "iframe", "source"]):
+        for attr in ["src", "href"]:
+            if tag.has_attr(attr):
+                add(tag.get(attr))
+    return sorted(domains)
+
+def extract_same_host_links(soup: BeautifulSoup, base_url: str, base_host: str):
+    out = set()
+    for a in soup.find_all("a"):
+        href = a.get("href")
+        if not href:
+            continue
+        u = urllib.parse.urljoin(base_url, href)
+        u = urllib.parse.urlparse(u)._replace(fragment="").geturl()
+        try:
+            if host_from_url(u) == base_host:
+                out.add(u)
+        except Exception:
+            pass
+    return sorted(out)
+
+def collect_posture(url: str, timeout: int = 20):
+    out = {
+        "url_input": url,
+        "url_final": None,
+        "status_code": None,
+        "history": [],
+        "headers": {},
+        "html_meta": {},
+        "links": {},
+        "assets": {},
+        "third_party_domains": [],
+        "robots_txt": None,
+        "sitemap_xml": None,
+        "tech": {"wappalyzer": None, "builtwith": None},
+        "errors": []
+    }
+
+    url = normalize_url(url)
+    base = get_base(url)
+    base_host = host_from_url(url)
+
+    try:
+        r = fetch(url, timeout=timeout)
+        out["url_final"] = r.url
+        out["status_code"] = r.status_code
+        out["headers"] = dict(r.headers)
+        out["history"] = [{"status": h.status_code, "url": h.url, "headers": dict(h.headers)} for h in r.history]
+        html = r.text or ""
+    except Exception as e:
+        out["errors"].append(f"fetch_main: {e}")
+        return out
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    meta = {}
+    for m in soup.find_all("meta"):
+        name = m.get("name") or m.get("property") or m.get("http-equiv")
+        content = m.get("content")
+        if name and content:
+            meta[name] = content
+    title = (soup.title.string.strip() if soup.title and soup.title.string else None)
+    out["html_meta"] = {"title": title, "meta": meta}
+
+    links = defaultdict(list)
+    for l in soup.find_all("link"):
+        rel = " ".join(l.get("rel", [])) if isinstance(l.get("rel"), list) else (l.get("rel") or "")
+        href = l.get("href")
+        if rel and href:
+            links[rel].append(href)
+    out["links"] = dict(links)
+
+    scripts = []
+    for s in soup.find_all("script"):
+        if s.get("src"):
+            scripts.append(s.get("src"))
+    styles = []
+    for l in soup.find_all("link"):
+        if (l.get("rel") and "stylesheet" in l.get("rel")) and l.get("href"):
+            styles.append(l.get("href"))
+    out["assets"] = {"scripts": scripts, "stylesheets": styles}
+
+    out["third_party_domains"] = extract_third_party_domains(soup, base_host)
+
+    try:
+        rr = fetch(base + "/robots.txt", timeout=timeout)
+        if rr.status_code < 500:
+            out["robots_txt"] = {"status": rr.status_code, "text": rr.text[:200000]}
+    except Exception as e:
+        out["errors"].append(f"robots: {e}")
+
+    try:
+        sm = fetch(base + "/sitemap.xml", timeout=timeout)
+        if sm.status_code < 500 and ("<urlset" in sm.text or "<sitemapindex" in sm.text):
+            out["sitemap_xml"] = {"status": sm.status_code, "text": sm.text[:200000]}
+    except Exception as e:
+        out["errors"].append(f"sitemap: {e}")
+
+    if Wappalyzer and WebPage:
+        try:
+            w = Wappalyzer.latest()
+            webpage = WebPage.new_from_url(out["url_final"] or url)
+            out["tech"]["wappalyzer"] = w.analyze_with_versions_and_categories(webpage)
+        except Exception as e:
+            out["errors"].append(f"wappalyzer: {e}")
+
+    if builtwith:
+        try:
+            out["tech"]["builtwith"] = builtwith.parse(out["url_final"] or url)
+        except Exception as e:
+            out["errors"].append(f"builtwith: {e}")
+
+    return out
+
+def collect_links(url: str, timeout: int = 20):
+    url = normalize_url(url)
+    base_host = host_from_url(url)
+    try:
+        r = fetch(url, timeout=timeout)
+        html = r.text or ""
+        soup = BeautifulSoup(html, "html.parser")
+        links = extract_same_host_links(soup, r.url, base_host)
+        return {"url_final": r.url, "status_code": r.status_code, "links": links, "error": None}
+    except Exception as e:
+        return {"url_final": None, "status_code": None, "links": [], "error": str(e)}
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("mode", choices=["posture", "links"])
+    ap.add_argument("url")
+    ap.add_argument("--timeout", type=int, default=20)
+    args = ap.parse_args()
+
+    if args.mode == "posture":
+        data = collect_posture(args.url, timeout=args.timeout)
+    else:
+        data = collect_links(args.url, timeout=args.timeout)
+
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+
+if __name__ == "__main__":
+    main()
+"""
+
+
+# -----------------------------
+def make_temp_venv() -> Tuple[Path, Path, Path]:
+    tmp_root = Path(tempfile.mkdtemp(prefix="inspect_venv_"))
+    venv_dir = tmp_root / "venv"
+    rc, _, se = _run([sys.executable, "-m", "venv", str(venv_dir)])
+    if rc != 0:
+        raise RuntimeError(f"Failed to create venv: {se}")
+
+    if platform.system().lower().startswith("win"):
+        py = venv_dir / "Scripts" / "python.exe"
+        pip = venv_dir / "Scripts" / "pip.exe"
+    else:
+        py = venv_dir / "bin" / "python"
+        pip = venv_dir / "bin" / "pip"
+
+    return tmp_root, py, pip
+
+
+def run_inner(py: Path, tmp_root: Path, mode: str, url: str, timeout_s: int, out_raw_dir: Path, tag: str) -> Dict[str, Any]:
+    inner_path = tmp_root / "inner.py"
+    if not inner_path.exists():
+        inner_path.write_text(INNER_SCRIPT, encoding="utf-8")
+
+    rc, so, se = _run([str(py), str(inner_path), mode, url, "--timeout", str(timeout_s)], timeout=max(60, timeout_s + 30))
+    safe_write(out_raw_dir / f"{tag}.stdout.json", so)
+    safe_write(out_raw_dir / f"{tag}.stderr.txt", se)
+
+    try:
+        return json.loads(so) if so.strip().startswith("{") else {"errors": ["inner returned non-json"], "raw": so, "rc": rc}
+    except Exception:
+        return {"errors": ["failed to parse inner json"], "raw": so, "stderr": se, "rc": rc}
