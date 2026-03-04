@@ -18,6 +18,9 @@ from .utils import (
     looks_like_html_path,
     now_iso,
     safe_write,
+    safe_write_json,
+    load_json_if_exists,
+    stable_page_id,
 )
 
 
@@ -72,6 +75,7 @@ def discover_pages(
     timeout_s: int,
     out_dir: Path,
     workers: int = 8,
+    resume: bool = False,
     **_ignored: object,
 ) -> Dict[str, Any]:
     """
@@ -91,6 +95,8 @@ def discover_pages(
     crawl_errors: List[Dict[str, Any]] = []
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    pages_cache_dir = raw_dir / "pages"
+    pages_cache_dir.mkdir(parents=True, exist_ok=True)
 
     pages: List[Dict[str, Any]] = []
     discovered: List[str] = []
@@ -142,6 +148,23 @@ def discover_pages(
 
     def _fetch_links(url: str) -> Tuple[str, List[str], int | None, str | None]:
         tag = _next_tag()
+
+        # Per-page cache: if present, skip network work.
+        pid = stable_page_id(url)
+        page_dir = pages_cache_dir / pid
+        cache_path = page_dir / "links.json"
+        if resume and cache_path.exists():
+            cached = load_json_if_exists(str(cache_path)) or {}
+            out_links = cached.get("links") or []
+            status = cached.get("status_code")
+            err = cached.get("error") or None
+            cleaned: List[str] = []
+            for u in out_links:
+                u = clean_url(u)
+                if u:
+                    cleaned.append(u)
+            return url, cleaned, status, err
+
         host_sem.acquire()
         try:
             data = run_inner(py, tmp_root, "links", url, timeout_s, raw_dir, tag)
@@ -158,6 +181,24 @@ def discover_pages(
 
         status = data.get("status_code")
         err = data.get("error") or None
+
+        # Persist per-page cache.
+        try:
+            page_dir.mkdir(parents=True, exist_ok=True)
+            safe_write_json(
+                cache_path,
+                {
+                    "url": url,
+                    "fetched_at": now_iso(),
+                    "status_code": status,
+                    "error": err,
+                    "links": cleaned,
+                },
+            )
+        except Exception:
+            # Cache is best-effort; never fail the crawl for it.
+            pass
+
         return url, cleaned, status, err
 
     in_flight = set()
@@ -230,6 +271,7 @@ def discover_pages(
             "max_pages": max_pages,
             "workers": cw,
             "host_inflight_limit": host_inflight_limit,
+            "resume": bool(resume),
         },
         "errors": crawl_errors,
         "pages": pages,

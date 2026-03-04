@@ -53,6 +53,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import hashlib
 import urllib.parse
 import xml.etree.ElementTree as ET
 from collections import deque
@@ -209,6 +210,15 @@ def pct01_to_pct(x: Optional[float]) -> Optional[int]:
         return int(round(float(x) * 100))
     except Exception:
         return None
+
+
+def stable_page_id(url: str) -> str:
+    """Stable, filesystem-friendly id for a page URL.
+
+    Used for per-page caching under raw/pages/<id>/.
+    """
+    u = clean_url(url).encode("utf-8", errors="ignore")
+    return hashlib.sha1(u).hexdigest()[:12]
 
 
 # -----------------------------

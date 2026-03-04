@@ -30,6 +30,9 @@ def cmd_crawl(args: argparse.Namespace) -> int:
     target = normalize_target(args.target)
     host = host_from_url(target)
 
+    if args.net_workers is not None:
+        args.crawl_workers = args.net_workers
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_dir = Path(args.out) if args.out else Path(f"./inspect_{host}_{stamp}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -44,6 +47,7 @@ def cmd_crawl(args: argparse.Namespace) -> int:
         timeout_s=args.timeout,
         out_dir=out_dir,
         workers=args.crawl_workers,
+        resume=bool(args.resume),
     )
 
     safe_write_json(out_dir / "pages.json", crawl)
@@ -56,6 +60,9 @@ def cmd_quality(args: argparse.Namespace) -> int:
     target = normalize_target(args.target)
     host = host_from_url(target)
 
+    if args.net_workers is not None:
+        args.crawl_workers = args.net_workers
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_dir = Path(args.out) if args.out else Path(f"./inspect_{host}_{stamp}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -64,31 +71,43 @@ def cmd_quality(args: argparse.Namespace) -> int:
     timings = {}
 
     t0 = time.perf_counter()
-    crawl = discover_pages(
-        target,
-        max_pages=args.max_pages,
-        timeout_s=args.timeout,
-        out_dir=out_dir,
-        workers=args.crawl_workers,
-    )
+    # Resume-friendly: reuse existing pages.json when present.
+    if args.resume and (out_dir / "pages.json").exists():
+        crawl = load_json_if_exists(str(out_dir / "pages.json")) or {}
+    else:
+        crawl = discover_pages(
+            target,
+            max_pages=args.max_pages,
+            timeout_s=args.timeout,
+            out_dir=out_dir,
+            workers=args.crawl_workers,
+            resume=bool(args.resume),
+        )
 
     urls = [p["url"] for p in (crawl.get("pages") or []) if p.get("url")]
     if not urls:
         urls = [target]
 
-    budget = load_json_if_exists(args.budget) or DEFAULT_BUDGET
+    # Persist crawl for later reuse.
+    safe_write_json(out_dir / "pages.json", crawl)
 
-    t0 = time.perf_counter()
-    quality = quality_for_urls(
-        urls,
-        out_dir=out_dir,
-        timeout_s=args.timeout,
-        budget=budget,
-        max_pages=args.max_pages,
-        workers=args.lighthouse_workers,
-    )
+    # Resume-friendly: reuse existing quality summary when present.
+    if args.resume and (out_dir / "quality_summary.json").exists():
+        quality = load_json_if_exists(str(out_dir / "quality_summary.json")) or {}
+    else:
+        budget = load_json_if_exists(args.budget) or DEFAULT_BUDGET
 
-    safe_write_json(out_dir / "quality_summary.json", quality)
+        t0 = time.perf_counter()
+        quality = quality_for_urls(
+            urls,
+            out_dir=out_dir,
+            timeout_s=args.timeout,
+            budget=budget,
+            max_pages=args.max_pages,
+            workers=args.lighthouse_workers,
+        )
+
+        safe_write_json(out_dir / "quality_summary.json", quality)
 
     print("✅ Quality audit complete")
     print(f"- summary: {out_dir / 'quality_summary.json'}")
@@ -106,13 +125,17 @@ def cmd_playwright(args: argparse.Namespace) -> int:
 
     urls = [target]
 
-    summary = playwright_for_urls(
-        urls,
-        out_dir=out_dir,
-        timeout_s=args.timeout,
-        max_pages=args.max_pages,
-        workers=args.playwright_workers,
-    )
+    # Resume-friendly: reuse existing summary when present.
+    if args.resume and (out_dir / "playwright_summary.json").exists():
+        summary = load_json_if_exists(str(out_dir / "playwright_summary.json")) or {}
+    else:
+        summary = playwright_for_urls(
+            urls,
+            out_dir=out_dir,
+            timeout_s=args.timeout,
+            max_pages=args.max_pages,
+            workers=args.playwright_workers,
+        )
 
     safe_write_json(out_dir / "playwright_summary.json", summary)
 
@@ -125,6 +148,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     target = normalize_target(args.target)
     host = host_from_url(target)
 
+    if args.net_workers is not None:
+        args.crawl_workers = args.net_workers
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out_dir = Path(args.out) if args.out else Path(f"./inspect_{host}_{stamp}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -132,51 +158,69 @@ def cmd_run(args: argparse.Namespace) -> int:
     t0_total = time.perf_counter()
     timings = {}
 
-    t0 = time.perf_counter()
-    crawl = discover_pages(
-        target,
-        max_pages=args.max_pages,
-        timeout_s=args.timeout,
-        out_dir=out_dir,
-        workers=args.crawl_workers,
-    )
+    # Resume-friendly: reuse existing pages.json when present.
+    if args.resume and (out_dir / "pages.json").exists():
+        crawl = load_json_if_exists(str(out_dir / "pages.json")) or {}
+        timings["crawl_s"] = 0.0
+    else:
+        t0 = time.perf_counter()
+        crawl = discover_pages(
+            target,
+            max_pages=args.max_pages,
+            timeout_s=args.timeout,
+            out_dir=out_dir,
+            workers=args.crawl_workers,
+            resume=bool(args.resume),
+        )
 
-    safe_write_json(out_dir / "pages.json", crawl)
-    timings["crawl_s"] = round(time.perf_counter() - t0, 3)
+        safe_write_json(out_dir / "pages.json", crawl)
+        timings["crawl_s"] = round(time.perf_counter() - t0, 3)
 
     urls = [p["url"] for p in (crawl.get("pages") or []) if p.get("url")]
     if not urls:
         urls = [target]
 
-    t0 = time.perf_counter()
-    posture = collect_posture(target, out_dir=out_dir, timeout_s=args.timeout)
-    safe_write_json(out_dir / "posture.json", posture)
-    timings["posture_s"] = round(time.perf_counter() - t0, 3)
+    if args.resume and (out_dir / "posture.json").exists():
+        posture = load_json_if_exists(str(out_dir / "posture.json")) or {}
+        timings["posture_s"] = 0.0
+    else:
+        t0 = time.perf_counter()
+        posture = collect_posture(target, out_dir=out_dir, timeout_s=args.timeout)
+        safe_write_json(out_dir / "posture.json", posture)
+        timings["posture_s"] = round(time.perf_counter() - t0, 3)
 
     budget = load_json_if_exists(args.budget) or DEFAULT_BUDGET
 
-    t0 = time.perf_counter()
-    quality = quality_for_urls(
-        urls,
-        out_dir=out_dir,
-        timeout_s=args.timeout,
-        budget=budget,
-        max_pages=args.max_pages,
-        workers=args.lighthouse_workers,
-    )
-    timings["lighthouse_s"] = round(time.perf_counter() - t0, 3)
-
-    playwright_summary = None
-    if not args.skip_playwright:
+    if args.resume and (out_dir / "quality_summary.json").exists():
+        quality = load_json_if_exists(str(out_dir / "quality_summary.json")) or {}
+        timings["lighthouse_s"] = 0.0
+    else:
         t0 = time.perf_counter()
-        playwright_summary = playwright_for_urls(
+        quality = quality_for_urls(
             urls,
             out_dir=out_dir,
             timeout_s=args.timeout,
+            budget=budget,
             max_pages=args.max_pages,
-            workers=args.playwright_workers,
+            workers=args.lighthouse_workers,
         )
-        timings["playwright_s"] = round(time.perf_counter() - t0, 3)
+        timings["lighthouse_s"] = round(time.perf_counter() - t0, 3)
+
+    playwright_summary = None
+    if not args.skip_playwright:
+        if args.resume and (out_dir / "playwright_summary.json").exists():
+            playwright_summary = load_json_if_exists(str(out_dir / "playwright_summary.json")) or {}
+            timings["playwright_s"] = 0.0
+        else:
+            t0 = time.perf_counter()
+            playwright_summary = playwright_for_urls(
+                urls,
+                out_dir=out_dir,
+                timeout_s=args.timeout,
+                max_pages=args.max_pages,
+                workers=args.playwright_workers,
+            )
+            timings["playwright_s"] = round(time.perf_counter() - t0, 3)
 
     run_obj = {
         "version": "0.6",
@@ -244,6 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--timeout", type=int, default=30)
     sp.add_argument("--crawl-workers", type=int, default=8)
     sp.add_argument("--net-workers", type=int, default=None, help="Alias for --crawl-workers; overrides when set")
+    sp.add_argument("--resume", action="store_true", help="Reuse cached artifacts in --out directory when present")
     sp.add_argument("--out")
     sp.set_defaults(fn=cmd_crawl)
 
@@ -256,6 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--net-workers", type=int, default=None, help="Alias for --crawl-workers; overrides when set")
     sp.add_argument("--lighthouse-workers", type=int, default=2)
     sp.add_argument("--budget")
+    sp.add_argument("--resume", action="store_true", help="Reuse cached artifacts in --out directory when present")
     sp.add_argument("--out")
     sp.set_defaults(fn=cmd_quality)
 
@@ -265,6 +311,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--max-pages", type=int, default=10)
     sp.add_argument("--timeout", type=int, default=30)
     sp.add_argument("--playwright-workers", type=int, default=1)
+    sp.add_argument("--resume", action="store_true", help="Reuse cached artifacts in --out directory when present")
     sp.add_argument("--out")
     sp.set_defaults(fn=cmd_playwright)
 
@@ -279,6 +326,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--playwright-workers", type=int, default=1)
     sp.add_argument("--skip-playwright", action="store_true")
     sp.add_argument("--budget")
+    sp.add_argument("--resume", action="store_true", help="Reuse cached artifacts in --out directory when present")
     sp.add_argument("--out")
     sp.set_defaults(fn=cmd_run)
 
