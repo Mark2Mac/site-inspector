@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .crawl import discover_pages
 from .posture import collect_posture
-from .lighthouse import quality_for_urls, DEFAULT_BUDGET
+from .lighthouse import quality_for_urls, DEFAULT_BUDGET, select_lighthouse_targets
 from .playwright_audit import playwright_for_urls
 from .diffing import load_run_dir, diff_runs, render_diff_md
 from .reporting import build_run_md
@@ -97,15 +97,48 @@ def cmd_quality(args: argparse.Namespace) -> int:
     else:
         budget = load_json_if_exists(args.budget) or DEFAULT_BUDGET
 
+        # A6: smarter Lighthouse targeting (sampling)
+        always_include = None
+        if args.lighthouse_include:
+            try:
+                always_include = [
+                    ln.strip()
+                    for ln in Path(args.lighthouse_include).read_text(encoding="utf-8").splitlines()
+                    if ln.strip() and not ln.strip().startswith("#")
+                ]
+            except Exception:
+                always_include = None
+
+        if args.lighthouse_sample is not None:
+            sel = select_lighthouse_targets(
+                urls,
+                target_url=target,
+                sample_total=int(args.lighthouse_sample),
+                per_group=int(args.lighthouse_per_group),
+                always_include=always_include,
+            )
+            urls_for_lh = sel.get("selected_urls") or urls
+            selection_meta = sel.get("selection")
+        else:
+            urls_for_lh = urls
+            selection_meta = {"mode": "all", "sample_total": None, "per_group": None, "always_include": []}
+
         t0 = time.perf_counter()
         quality = quality_for_urls(
-            urls,
+            urls_for_lh,
             out_dir=out_dir,
             timeout_s=args.timeout,
             budget=budget,
-            max_pages=args.max_pages,
+            max_pages=args.lighthouse_max_pages if args.lighthouse_max_pages is not None else args.max_pages,
             workers=args.lighthouse_workers,
         )
+
+        # Persist selection info for reporting/diffing.
+        try:
+            quality["selection"] = selection_meta
+            quality["selected_urls"] = urls_for_lh
+        except Exception:
+            pass
 
         safe_write_json(out_dir / "quality_summary.json", quality)
 
@@ -195,16 +228,51 @@ def cmd_run(args: argparse.Namespace) -> int:
         quality = load_json_if_exists(str(out_dir / "quality_summary.json")) or {}
         timings["lighthouse_s"] = 0.0
     else:
+        # A6: smarter Lighthouse targeting (sampling)
+        always_include = None
+        if args.lighthouse_include:
+            try:
+                always_include = [
+                    ln.strip()
+                    for ln in Path(args.lighthouse_include).read_text(encoding="utf-8").splitlines()
+                    if ln.strip() and not ln.strip().startswith("#")
+                ]
+            except Exception:
+                always_include = None
+
+        if args.lighthouse_sample is not None:
+            sel = select_lighthouse_targets(
+                urls,
+                target_url=target,
+                sample_total=int(args.lighthouse_sample),
+                per_group=int(args.lighthouse_per_group),
+                always_include=always_include,
+            )
+            urls_for_lh = sel.get("selected_urls") or urls
+            selection_meta = sel.get("selection")
+        else:
+            urls_for_lh = urls
+            selection_meta = {"mode": "all", "sample_total": None, "per_group": None, "always_include": []}
+
         t0 = time.perf_counter()
         quality = quality_for_urls(
-            urls,
+            urls_for_lh,
             out_dir=out_dir,
             timeout_s=args.timeout,
             budget=budget,
-            max_pages=args.max_pages,
+            max_pages=args.lighthouse_max_pages if args.lighthouse_max_pages is not None else args.max_pages,
             workers=args.lighthouse_workers,
         )
         timings["lighthouse_s"] = round(time.perf_counter() - t0, 3)
+
+        try:
+            quality["selection"] = selection_meta
+            quality["selected_urls"] = urls_for_lh
+        except Exception:
+            pass
+
+        # Keep an explicit cache file so --resume works consistently.
+        safe_write_json(out_dir / "quality_summary.json", quality)
 
     playwright_summary = None
     if not args.skip_playwright:
@@ -300,6 +368,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--crawl-workers", type=int, default=8)
     sp.add_argument("--net-workers", type=int, default=None, help="Alias for --crawl-workers; overrides when set")
     sp.add_argument("--lighthouse-workers", type=int, default=2)
+    sp.add_argument("--lighthouse-sample", type=int, default=None, help="Run Lighthouse on a sampled subset of pages (max N). Default: all pages")
+    sp.add_argument("--lighthouse-per-group", type=int, default=1, help="When sampling, pick up to K pages per top-level path group")
+    sp.add_argument("--lighthouse-max-pages", type=int, default=None, help="Hard cap for Lighthouse pages (defaults to --max-pages)")
+    sp.add_argument("--lighthouse-include", default=None, help="Path to a .txt file with URLs to always include (one per line; # comments allowed)")
     sp.add_argument("--budget")
     sp.add_argument("--resume", action="store_true", help="Reuse cached artifacts in --out directory when present")
     sp.add_argument("--out")
@@ -323,6 +395,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--crawl-workers", type=int, default=8)
     sp.add_argument("--net-workers", type=int, default=None, help="Alias for --crawl-workers; overrides when set")
     sp.add_argument("--lighthouse-workers", type=int, default=2)
+    sp.add_argument("--lighthouse-sample", type=int, default=None, help="Run Lighthouse on a sampled subset of pages (max N). Default: all pages")
+    sp.add_argument("--lighthouse-per-group", type=int, default=1, help="When sampling, pick up to K pages per top-level path group")
+    sp.add_argument("--lighthouse-max-pages", type=int, default=None, help="Hard cap for Lighthouse pages (defaults to --max-pages)")
+    sp.add_argument("--lighthouse-include", default=None, help="Path to a .txt file with URLs to always include (one per line; # comments allowed)")
     sp.add_argument("--playwright-workers", type=int, default=1)
     sp.add_argument("--skip-playwright", action="store_true")
     sp.add_argument("--budget")

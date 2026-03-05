@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
+from urllib.parse import urlparse
 
 from .utils import _run, pct01_to_pct, safe_write, slugify_url_for_filename, which, now_iso
 
@@ -251,3 +253,110 @@ def quality_for_urls(
         "failures": failures,
     }
     return summary
+
+
+# -----------------------------
+# Lighthouse targeting (sampling)
+# -----------------------------
+
+def _group_key_for_url(u: str) -> str:
+    """Cheap heuristic to group similar pages.
+
+    We group by first path segment ("/products/..." => "products").
+    This keeps sampling stable and avoids template inference complexity.
+    """
+    try:
+        p = urlparse(u)
+        path = (p.path or "/").strip("/")
+        if not path:
+            return "root"
+        return path.split("/")[0].lower() or "root"
+    except Exception:
+        return "root"
+
+
+def select_lighthouse_targets(
+    urls: List[str],
+    *,
+    target_url: str,
+    sample_total: int,
+    per_group: int = 1,
+    always_include: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Select a stable subset of URLs for Lighthouse.
+
+    - Always includes the target_url (typically the homepage)
+    - Optionally always includes URLs from an external list
+    - Samples deterministically per group to keep diffs stable
+    """
+    per_group = max(1, int(per_group))
+    sample_total = max(1, int(sample_total))
+
+    # Stable ordering
+    uniq: List[str] = []
+    seen = set()
+    for u in urls:
+        if u and u not in seen:
+            seen.add(u)
+            uniq.append(u)
+
+    must: List[str] = []
+    for u in [target_url, *(always_include or [])]:
+        if u and u not in seen:
+            seen.add(u)
+            uniq.append(u)
+        if u and u not in must:
+            must.append(u)
+
+    selected: List[str] = []
+
+    def _add(u: str) -> None:
+        if u and u not in selected:
+            selected.append(u)
+
+    # Always include must-have URLs first
+    for u in must:
+        _add(u)
+        if len(selected) >= sample_total:
+            return {
+                "selected_urls": selected[:sample_total],
+                "selection": {
+                    "mode": "sampled",
+                    "sample_total": sample_total,
+                    "per_group": per_group,
+                    "groups": {},
+                    "always_include": must,
+                },
+            }
+
+    # Group remaining URLs and pick first K per group
+    groups: Dict[str, List[str]] = {}
+    for u in uniq:
+        if u in selected:
+            continue
+        k = _group_key_for_url(u)
+        groups.setdefault(k, []).append(u)
+
+    # Deterministic: group names sorted, URLs within group sorted
+    picked_by_group: Dict[str, int] = {}
+    for g in sorted(groups.keys()):
+        for u in sorted(groups[g]):
+            if picked_by_group.get(g, 0) >= per_group:
+                continue
+            _add(u)
+            picked_by_group[g] = picked_by_group.get(g, 0) + 1
+            if len(selected) >= sample_total:
+                break
+        if len(selected) >= sample_total:
+            break
+
+    return {
+        "selected_urls": selected[:sample_total],
+        "selection": {
+            "mode": "sampled",
+            "sample_total": sample_total,
+            "per_group": per_group,
+            "groups": picked_by_group,
+            "always_include": must,
+        },
+    }
