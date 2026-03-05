@@ -269,8 +269,9 @@ def discover_pages(
         fp = None
         try:
             cache_path = out_dir / "raw" / "pages" / pid / "links.json"
-            cached = load_json_if_exists(str(cache_path)) or {}
-            fp = cached.get("dom_fingerprint")
+            if cache_path.exists():
+                cached = load_json_if_exists(str(cache_path)) or {}
+                fp = cached.get("dom_fingerprint")
         except Exception:
             fp = None
         pages.append({"url": u, "page_id": pid, "dom_fingerprint": fp})
