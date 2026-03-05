@@ -132,31 +132,31 @@ def cmd_quality(args: argparse.Namespace) -> int:
 
         if args.lighthouse_sample is not None:
 
-# B2: template-aware grouping for sampling (DOM fingerprint if available, else URL template)
-group_map = None
-try:
-    pages_list = crawl.get("pages") or []
-    gm = {}
-    has_fp = False
-    for p in pages_list:
-        u = p.get("url")
-        if not u:
-            continue
-        fp = p.get("dom_fingerprint")
-        if fp:
-            gm[u] = f"dom:{fp}"
-            has_fp = True
-    if not has_fp:
-        from .template_clustering import url_to_template
-        for p in pages_list:
-            u = p.get("url")
-            if not u:
-                continue
-            gm[u] = f"url:{url_to_template(u)}"
-    if gm:
-        group_map = gm
-except Exception:
-    group_map = None
+            # B2: template-aware grouping for sampling (DOM fingerprint if available, else URL template)
+            group_map = None
+            try:
+                pages_list = crawl.get("pages") or []
+                gm = {}
+                has_fp = False
+                for p in pages_list:
+                    u = p.get("url")
+                    if not u:
+                        continue
+                    fp = p.get("dom_fingerprint")
+                    if fp:
+                        gm[u] = f"dom:{fp}"
+                        has_fp = True
+                if not has_fp:
+                    from .template_clustering import url_to_template
+                    for p in pages_list:
+                        u = p.get("url")
+                        if not u:
+                            continue
+                        gm[u] = f"url:{url_to_template(u)}"
+                if gm:
+                    group_map = gm
+            except Exception:
+                group_map = None
 
             sel = select_lighthouse_targets(
                 urls,
