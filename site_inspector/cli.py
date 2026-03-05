@@ -12,6 +12,8 @@ from .lighthouse import quality_for_urls, DEFAULT_BUDGET, select_lighthouse_targ
 from .playwright_audit import playwright_for_urls
 from .diffing import load_run_dir, diff_runs, render_diff_md
 from .reporting import build_run_md
+from .template_clustering import cluster_urls, summarize_clusters
+from .dom_clustering import cluster_by_dom_fingerprint, summarize_dom_clusters
 from .utils import (
     normalize_target,
     host_from_url,
@@ -88,7 +90,26 @@ def cmd_quality(args: argparse.Namespace) -> int:
     if not urls:
         urls = [target]
 
-    # Persist crawl for later reuse.
+    
+
+    # Template clustering (URL + DOM fingerprint)
+    try:
+        pages_list = crawl.get("pages") or []
+        url_clusters = cluster_urls([p.get("url") for p in pages_list if p.get("url")])
+        dom_clusters = cluster_by_dom_fingerprint(pages_list)
+
+        crawl["templates"] = {
+            "url": {
+                "summary": summarize_clusters(url_clusters),
+            },
+            "dom": {
+                "summary": summarize_dom_clusters(dom_clusters),
+            },
+        }
+    except Exception:
+        # Best-effort; never fail the run for clustering.
+        pass
+# Persist crawl for later reuse.
     safe_write_json(out_dir / "pages.json", crawl)
 
     # Resume-friendly: reuse existing quality summary when present.

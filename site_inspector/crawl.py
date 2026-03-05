@@ -181,6 +181,8 @@ def discover_pages(
 
         status = data.get("status_code")
         err = data.get("error") or None
+        fp = data.get("dom_fingerprint")
+        fp_nodes = data.get("dom_fingerprint_nodes")
 
         # Persist per-page cache.
         try:
@@ -193,6 +195,8 @@ def discover_pages(
                     "status_code": status,
                     "error": err,
                     "links": cleaned,
+                    "dom_fingerprint": fp,
+                    "dom_fingerprint_nodes": fp_nodes,
                 },
             )
         except Exception:
@@ -255,11 +259,21 @@ def discover_pages(
                     fut = ex.submit(_fetch_links, u)
                     futures[fut] = u
 
+
+
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
 
     for u in discovered[:max_pages]:
-        pages.append({"url": u})
+        pid = stable_page_id(u)
+        fp = None
+        try:
+            cache_path = out_dir / "raw" / "pages" / pid / "links.json"
+            cached = load_json_if_exists(str(cache_path)) or {}
+            fp = cached.get("dom_fingerprint")
+        except Exception:
+            fp = None
+        pages.append({"url": u, "page_id": pid, "dom_fingerprint": fp})
 
     return {
         "target_url": target_url,

@@ -24,6 +24,31 @@ from collections import defaultdict
 
 import requests
 from bs4 import BeautifulSoup
+import hashlib
+
+def dom_fingerprint_from_soup(soup: BeautifulSoup, *, max_nodes: int = 600, max_depth: int = 6):
+    # Lightweight structural DOM fingerprint (tags + depth, limited)
+    body = soup.body or soup
+    items = []
+    n = 0
+    for el in body.descendants:
+        # BeautifulSoup Tag has name attribute; NavigableString doesn't.
+        name = getattr(el, "name", None)
+        if not name:
+            continue
+        # Depth (walk parents until body)
+        depth = 0
+        p = el.parent
+        while p is not None and p is not body and depth < max_depth:
+            if getattr(p, "name", None):
+                depth += 1
+            p = getattr(p, "parent", None)
+        items.append(f"{depth}:{name}")
+        n += 1
+        if n >= max_nodes:
+            break
+    raw = "\n".join(items).encode("utf-8", errors="ignore")
+    return hashlib.sha1(raw).hexdigest(), len(items)
 import time
 import random
 
@@ -224,9 +249,33 @@ def collect_links(url: str, timeout: int = 20):
         html = r.text or ""
         soup = BeautifulSoup(html, "html.parser")
         links = extract_same_host_links(soup, r.url, base_host)
-        return {"url_final": r.url, "status_code": r.status_code, "links": links, "error": None}
+
+        fp = None
+        fp_nodes = None
+        # Best-effort fingerprint only for HTML-ish content.
+        try:
+            fp, fp_nodes = dom_fingerprint_from_soup(soup)
+        except Exception:
+            fp = None
+            fp_nodes = None
+
+        return {
+            "url_final": r.url,
+            "status_code": r.status_code,
+            "links": links,
+            "dom_fingerprint": fp,
+            "dom_fingerprint_nodes": fp_nodes,
+            "error": None,
+        }
     except Exception as e:
-        return {"url_final": None, "status_code": None, "links": [], "error": str(e)}
+        return {
+            "url_final": None,
+            "status_code": None,
+            "links": [],
+            "dom_fingerprint": None,
+            "dom_fingerprint_nodes": None,
+            "error": str(e),
+        }
 
 def main():
     ap = argparse.ArgumentParser()

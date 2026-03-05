@@ -61,6 +61,37 @@ def build_run_md(run: Dict[str, Any]) -> str:
                 lines.append("- … (truncated)")
             lines.append("")
 
+
+    # Templates (URL + DOM)
+    try:
+        templates = (crawl or {}).get("templates") or {}
+        url_t = (templates.get("url") or {}).get("summary") or []
+        dom_t = (templates.get("dom") or {}).get("summary") or []
+
+        if url_t or dom_t:
+            lines.append("## Templates\n")
+
+        if url_t:
+            lines.append("### URL templates (top 15)\n")
+            for item in url_t[:15]:
+                lines.append(f"- `{item.get('template')}` — **{item.get('pages')} pages**")
+            lines.append("")
+
+        if dom_t:
+            lines.append("### DOM templates (top 15)\n")
+            for item in dom_t[:15]:
+                fp = item.get("dom_fingerprint")
+                pages_n = item.get("pages")
+                ex = item.get("examples") or []
+                ex_s = ", ".join(ex)
+                if ex_s:
+                    lines.append(f"- `{fp}` — **{pages_n} pages** (e.g. {ex_s})")
+                else:
+                    lines.append(f"- `{fp}` — **{pages_n} pages**")
+            lines.append("")
+    except Exception:
+        pass
+
     posture = run.get("posture")
     if posture:
         http = posture.get("http") or {}
