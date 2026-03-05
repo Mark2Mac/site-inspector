@@ -1,98 +1,44 @@
-# Site Inspector
 
-Windows-first CLI tool to audit websites and generate reproducible artifacts:
+# CrawlLens
 
-- **crawl**: page discovery (sitemap + internal links)
-- **posture**: headers / TLS / DNS / tech fingerprinting / third parties
-- **quality**: Lighthouse + budgets
-- **playwright**: JS-rendered artifacts (DOM/screenshot/network)
-- **run**: orchestrates crawl → posture → quality → (optional) playwright
-- **diff**: compare two runs and report regressions
+CrawlLens is a CLI tool for crawling websites and generating technical audit reports.
 
-## Status (today)
+## Features
 
-✅ End-to-end pipeline verified on Windows:
+- Concurrent crawler
+- Host throttling + retries
+- Resume runs
+- URL normalization
+- Lighthouse sampling
+- Playwright analysis
+- Run diffing
+- Template clustering
 
-- `run` generates `run.json` + `run.md`
-- `playwright` generates `playwright_summary.json`
-- `diff` generates `diff.json` + `diff.md`
+## Commands
 
-✅ Scale-A groundwork implemented:
+Run crawl
 
-- Concurrent crawl worker support (`--crawl-workers`)
-- Lighthouse concurrency control (`--lighthouse-workers`)
-- Windows-safe subprocess execution for Node wrappers (npx.cmd)
-- UTF-8 safe subprocess output capture
-- CLI/module arg compatibility hardening (aliases + safe defaults)
-
-## Quick start
-
-### Full run
-```powershell
 python site_audit.py run https://example.com
-```
 
-### Fast crawl (up to ~500 pages)
-```powershell
-python site_audit.py crawl https://example.com --max-pages 300 --crawl-workers 16
-```
+Run playwright audit
 
-### Quality audit (heavy — keep workers low)
-```powershell
-python site_audit.py quality https://example.com --max-pages 30 --crawl-workers 16 --lighthouse-workers 2
-```
+python site_audit.py playwright https://example.com
 
-### JS rendering (Playwright)
-```powershell
-python site_audit.py playwright https://example.com --max-pages 10
-```
+Diff runs
 
-### Diff two runs
-```powershell
-python site_audit.py run https://example.com --skip-playwright --out runs\runA
-python site_audit.py run https://example.com --skip-playwright --out runs\runB
-python site_audit.py diff runs\runA runs\runB --out diffs\runA_vs_runB
-```
+python site_audit.py diff runs/runA runs/runB
 
-## Output structure
+## Template Clustering
 
-A run produces:
+Pages are grouped by URL structure.
 
-```
-inspect_<host>_<timestamp>/
-  run.json
-  run.md
-  pages.json
-  posture.json
-  lighthouse/
-  playwright/
-  raw/
-```
+Example
 
-Diff produces:
+/blog/post-1
+/blog/post-2
 
-```
-diffs/<name>/
-  diff.json
-  diff.md
-```
+→ template
 
-## Architecture
+/blog/*
 
-`site_audit.py` is the stable entrypoint.
-
-Modules live in `site_inspector/`:
-
-- `cli.py` – CLI + commands
-- `crawl.py` – page discovery (concurrent)
-- `posture.py` – posture collection
-- `lighthouse.py` – Lighthouse runner + budget eval (worker cap + arg alias)
-- `playwright_audit.py` – Playwright artifacts
-- `diffing.py` – diff engine + Markdown renderer
-- `reporting.py` – run report generation
-- `utils.py` – shared helpers
-- `inner_collectors.py` – isolated venv runner for collectors
-
-## Roadmap
-
-See **ROADMAP_VERBOSE.md** for the detailed plan and next steps.
+This helps large-site analysis and sampling.

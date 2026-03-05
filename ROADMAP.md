@@ -1,100 +1,38 @@
-# Site Inspector Roadmap (Verbose)
 
-This document describes the evolution plan of the project.
+# CrawlLens Roadmap
 
----
+## Phase A – Crawl Stability (Complete)
 
-# Phase 1 — Stable CLI Audit Tool
+A1 – Crawl engine
+A2 – Worker pool split
+A3 – Host throttling + retries
+A4 – Resume + page cache
+A5 – URL normalization
+A6 – Lighthouse sampling
 
-Status: COMPLETE
+## Phase B – Site Structure Intelligence
 
-Goals achieved:
+B0 – URL template clustering
+B1 – DOM fingerprint clustering
+B2 – Template-aware Lighthouse runs
+B3 – Duplicate detection
 
-- Modular architecture
-- CLI commands for crawl, posture, lighthouse, playwright, diff
-- Windows-compatible subprocess execution
-- Reproducible run artifacts
-- Markdown reports
-- Diff analysis between runs
+## Phase C – SEO + AI Crawling
 
-The system now works end-to-end.
+C1 – Structured data detection
+C2 – AI crawler optimization score
+C3 – Semantic heading analysis
+C4 – Content duplication detection
 
----
+## Phase D – Advanced Analysis
 
-# Phase 2 — Scalability (Target: ~500 pages)
+D1 – Internal link graph
+D2 – Template performance scoring
+D3 – Crawl depth visualization
 
-Current focus.
+## Phase E – Productization
 
-Objectives:
-
-1. Parallel crawl workers
-2. URL normalization and deduplication
-3. Host-based throttling
-4. Worker queue architecture
-5. Lighthouse concurrency limits
-6. Resumeable runs via artifact caching
-
-Expected benefits:
-
-- 3x–6x speed improvement
-- stable memory usage
-- ability to audit medium-size websites
-
----
-
-# Phase 3 — Large Site Support (~5000 pages)
-
-Future milestone.
-
-Planned improvements:
-
-Distributed crawling architecture
-
-Task queue abstraction
-
-Smart sampling for Lighthouse
-
-Template detection (group pages by layout)
-
-Playwright heuristics to detect JS-heavy pages
-
-Advanced tech fingerprinting datasets
-
----
-
-# Phase 4 — AI Crawler Optimization
-
-Long-term vision.
-
-Add analysis specifically designed for:
-
-- ChatGPT
-- Gemini
-- Claude
-- other LLM crawlers
-
-Possible checks:
-
-structured data completeness
-
-semantic HTML structure
-
-content accessibility
-
-LLM-friendly metadata
-
----
-
-# Phase 5 — Distributed Architecture
-
-Ultimate scalability goal.
-
-Possible features:
-
-multi-machine crawl workers
-
-shared task queue
-
-remote artifact storage
-
-CI integration for regression monitoring
+E1 – CLI package
+E2 – Config profiles
+E3 – HTML reports
+E4 – SaaS version
