@@ -131,12 +131,40 @@ def cmd_quality(args: argparse.Namespace) -> int:
                 always_include = None
 
         if args.lighthouse_sample is not None:
+
+# B2: template-aware grouping for sampling (DOM fingerprint if available, else URL template)
+group_map = None
+try:
+    pages_list = crawl.get("pages") or []
+    gm = {}
+    has_fp = False
+    for p in pages_list:
+        u = p.get("url")
+        if not u:
+            continue
+        fp = p.get("dom_fingerprint")
+        if fp:
+            gm[u] = f"dom:{fp}"
+            has_fp = True
+    if not has_fp:
+        from .template_clustering import url_to_template
+        for p in pages_list:
+            u = p.get("url")
+            if not u:
+                continue
+            gm[u] = f"url:{url_to_template(u)}"
+    if gm:
+        group_map = gm
+except Exception:
+    group_map = None
+
             sel = select_lighthouse_targets(
                 urls,
                 target_url=target,
                 sample_total=int(args.lighthouse_sample),
                 per_group=int(args.lighthouse_per_group),
                 always_include=always_include,
+                group_map=group_map,
             )
             urls_for_lh = sel.get("selected_urls") or urls
             selection_meta = sel.get("selection")
@@ -268,6 +296,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 sample_total=int(args.lighthouse_sample),
                 per_group=int(args.lighthouse_per_group),
                 always_include=always_include,
+                group_map=group_map,
             )
             urls_for_lh = sel.get("selected_urls") or urls
             selection_meta = sel.get("selection")

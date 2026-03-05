@@ -282,6 +282,7 @@ def select_lighthouse_targets(
     sample_total: int,
     per_group: int = 1,
     always_include: Optional[List[str]] = None,
+    group_map: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Select a stable subset of URLs for Lighthouse.
 
@@ -325,6 +326,7 @@ def select_lighthouse_targets(
                     "sample_total": sample_total,
                     "per_group": per_group,
                     "groups": {},
+                    "grouping": "template" if group_map else "path-segment",
                     "always_include": must,
                 },
             }
@@ -334,7 +336,7 @@ def select_lighthouse_targets(
     for u in uniq:
         if u in selected:
             continue
-        k = _group_key_for_url(u)
+        k = (group_map.get(u) if isinstance(group_map, dict) and group_map.get(u) else _group_key_for_url(u))
         groups.setdefault(k, []).append(u)
 
     # Deterministic: group names sorted, URLs within group sorted
@@ -357,6 +359,7 @@ def select_lighthouse_targets(
             "sample_total": sample_total,
             "per_group": per_group,
             "groups": picked_by_group,
+                    "grouping": "template" if group_map else "path-segment",
             "always_include": must,
         },
     }
