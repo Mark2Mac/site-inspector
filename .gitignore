@@ -21,3 +21,6 @@ inspect_*/
 
 # Logs
 *.log
+
+# Local Site Inspector artifacts
+.site_inspector_local/

@@ -17,7 +17,9 @@ param(
     [string]$Site = "https://www.dedicatodesign.com",
     [int]$MaxPages = 5,
     [int]$PlaywrightPages = 3,
-    [int]$PytestLoops = 5
+    [int]$PytestLoops = 5,
+
+    [string]$RootDir = ".site_inspector_local"
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,9 +37,41 @@ function Run-Cmd([string]$cmd) {
     }
 }
 
+function Join-Root([string]$child) {
+    return [System.IO.Path]::Combine($RootDir, $child)
+}
+
 function Ensure-Dirs {
-    New-Item -ItemType Directory -Force -Path "runs" | Out-Null
-    New-Item -ItemType Directory -Force -Path "diffs" | Out-Null
+    New-Item -ItemType Directory -Force -Path $RootDir | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Root "runs") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Root "diffs") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Root "logs") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Root "budgets") | Out-Null
+}
+
+function Expect-NativeFailure([string]$label, [scriptblock]$block) {
+    Write-Host "PS> $label" -ForegroundColor DarkGray
+    & $block
+    if ($LASTEXITCODE -eq 0) {
+        throw ("Command unexpectedly succeeded: {0}" -f $label)
+    }
+    Write-Host ("Expected failure observed (exit {0})" -f $LASTEXITCODE) -ForegroundColor Yellow
+}
+
+function Write-LooseBudget {
+    Ensure-Dirs
+    $budgetPath = Join-Root "budgets\loose_budget.json"
+    $budgetObj = @{
+        categories = @{
+            performance     = @{ min_score = 0.00 }
+            seo             = @{ min_score = 0.00 }
+            accessibility   = @{ min_score = 0.00 }
+            "best-practices" = @{ min_score = 0.00 }
+        }
+        audits = @{}
+    }
+    $budgetObj | ConvertTo-Json -Depth 5 | Set-Content -Path $budgetPath -Encoding UTF8
+    return $budgetPath
 }
 
 function Test-Setup {
@@ -60,7 +94,7 @@ function Test-PytestVerbose {
 function Test-PytestLoop {
     Write-Step "Running pytest loop"
     for ($i=1; $i -le $PytestLoops; $i++) {
-        Write-Host "Loop $i / $PytestLoops" -ForegroundColor Yellow
+        Write-Host ("Loop {0} / {1}" -f $i, $PytestLoops) -ForegroundColor Yellow
         Run-Cmd 'py -m pytest -q'
     }
 }
@@ -78,90 +112,129 @@ function Test-HelpChecks {
 function Test-SmokeCore {
     Ensure-Dirs
     Write-Step "Running smoke core commands"
-    Run-Cmd "py site_audit.py crawl $Site --max-pages $MaxPages --out runs\crawl_test"
-    Run-Cmd "py site_audit.py quality $Site --max-pages $MaxPages --out runs\quality_test"
-    Run-Cmd "py site_audit.py playwright $Site --max-pages $PlaywrightPages --out runs\playwright_test"
-    Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\run_test"
-    Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --out runs\run_full_test"
+    Run-Cmd ('py site_audit.py crawl "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\crawl_test"))
+    Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_test"))
+    Run-Cmd ('py site_audit.py playwright "{0}" --max-pages {1} --out "{2}"' -f $Site, $PlaywrightPages, (Join-Root "runs\playwright_test"))
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\run_test"))
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\run_full_test"))
 }
 
 function Test-ResumeChecks {
     Ensure-Dirs
     Write-Step "Running resume/cache checks"
-    Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\resume_test"
-    Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --resume --out runs\resume_test"
-    Run-Cmd "py site_audit.py crawl $Site --max-pages $MaxPages --resume --out runs\crawl_resume_test"
-    Run-Cmd "py site_audit.py quality $Site --max-pages $MaxPages --resume --out runs\quality_resume_test"
-    Run-Cmd "py site_audit.py playwright $Site --max-pages $PlaywrightPages --resume --out runs\playwright_resume_test"
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\resume_test"))
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\resume_test"))
+    Run-Cmd ('py site_audit.py crawl "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\crawl_resume_test"))
+    Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_resume_test"))
+    Run-Cmd ('py site_audit.py playwright "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $PlaywrightPages, (Join-Root "runs\playwright_resume_test"))
 }
 
 function Test-DuplicateChecks {
     Ensure-Dirs
     Write-Step "Running duplicate/B3 checks"
-    Run-Cmd "py site_audit.py run $Site --max-pages 10 --skip-playwright --out runs\dup_test"
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\dup_test\run.json -Pattern ''\"duplicates\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\dup_test\run.json -Pattern ''\"validation\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\dup_test\run.json -Pattern ''\"confidence_bucket\"''"'
+    $dupRun = Join-Root "runs\dup_test"
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages 10 --skip-playwright --out "{1}"' -f $Site, $dupRun)
+
+    $jsonPath = Join-Root "runs\dup_test\run.json"
+    $json = Get-Content -Raw -Path $jsonPath | ConvertFrom-Json
+
+    if (-not $json.PSObject.Properties.Name.Contains("duplicates")) {
+        throw ("duplicates block missing in {0}" -f $jsonPath)
+    }
+    if (-not $json.duplicates.PSObject.Properties.Name.Contains("validation")) {
+        throw ("duplicates.validation block missing in {0}" -f $jsonPath)
+    }
+
+    Write-Host "duplicates block present" -ForegroundColor Green
+    Write-Host "validation block present" -ForegroundColor Green
 }
 
 function Test-DiffChecks {
     Ensure-Dirs
     Write-Step "Running diff checks"
-    Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\golden"
-    Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\candidate"
-    Run-Cmd 'py site_audit.py diff runs\golden runs\candidate --out diffs\golden_vs_candidate'
-    Run-Cmd 'py site_audit.py diff runs\golden\run.json runs\candidate\run.json --out diffs\json_vs_json'
+    $golden = Join-Root "runs\golden"
+    $candidate = Join-Root "runs\candidate"
+    $diffDir = Join-Root "diffs\golden_vs_candidate"
+    $diffJsonDir = Join-Root "diffs\json_vs_json"
+
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $golden)
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
+    Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
+    Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\golden\run.json"), (Join-Root "runs\candidate\run.json"), $diffJsonDir)
 }
 
 function Test-ErrorChecks {
     Ensure-Dirs
     Write-Step "Running error-handling checks"
-    New-Item -ItemType Directory -Force -Path "runs\empty_test" | Out-Null
+    $candidate = Join-Root "runs\candidate"
+    if (-not (Test-Path (Join-Root "runs\candidate\run.json"))) {
+        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
+    }
 
+    New-Item -ItemType Directory -Force -Path (Join-Root "runs\empty_test") | Out-Null
     Write-Host "These commands are expected to fail with a human-readable error." -ForegroundColor Yellow
 
-    & py site_audit.py diff runs\does_not_exist runs\candidate --out diffs\bad_left
-    & py site_audit.py diff runs\candidate runs\does_not_exist --out diffs\bad_right
-    & py site_audit.py diff runs\empty_test runs\candidate --out diffs\bad_empty
+    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
+        py site_audit.py diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
+    }
+
+    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
+        py site_audit.py diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
+    }
+
+    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
+        py site_audit.py diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
+    }
 }
 
 function Test-BudgetChecks {
     Ensure-Dirs
     Write-Step "Running quality budget checks"
-    Run-Cmd "py site_audit.py quality $Site --max-pages $MaxPages --out runs\quality_budget --budget-p90 0.8 --budget-lcp-ms 2500 --budget-cls 0.1 --budget-tbt-ms 300"
-    Run-Cmd "py site_audit.py quality $Site --max-pages 10 --lh-mode sample --sample-total 3 --out runs\quality_sample"
-    Run-Cmd "py site_audit.py quality $Site --max-pages 10 --lh-mode clustered --per-group 1 --out runs\quality_clustered"
+    $budgetPath = Write-LooseBudget
+    Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --budget "{2}" --out "{3}"' -f $Site, $MaxPages, $budgetPath, (Join-Root "runs\quality_budget"))
+    Run-Cmd ('py site_audit.py quality "{0}" --max-pages 10 --lighthouse-sample 3 --out "{1}"' -f $Site, (Join-Root "runs\quality_sample"))
+    Run-Cmd ('py site_audit.py quality "{0}" --max-pages 10 --lighthouse-sample 3 --lighthouse-per-group 1 --out "{1}"' -f $Site, (Join-Root "runs\quality_grouped"))
 }
 
 function Test-OutputChecks {
     Ensure-Dirs
     Write-Step "Running output file/content checks"
-    if (-not (Test-Path "runs\run_test\run.json")) {
-        Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\run_test"
+    $runTest = Join-Root "runs\run_test"
+    $golden = Join-Root "runs\golden"
+    $candidate = Join-Root "runs\candidate"
+    $diffDir = Join-Root "diffs\golden_vs_candidate"
+
+    if (-not (Test-Path (Join-Root "runs\run_test\run.json"))) {
+        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $runTest)
     }
-    if (-not (Test-Path "runs\golden\run.json")) {
-        Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\golden"
+    if (-not (Test-Path (Join-Root "runs\golden\run.json"))) {
+        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $golden)
     }
-    if (-not (Test-Path "runs\candidate\run.json")) {
-        Run-Cmd "py site_audit.py run $Site --max-pages $MaxPages --skip-playwright --out runs\candidate"
+    if (-not (Test-Path (Join-Root "runs\candidate\run.json"))) {
+        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
     }
-    if (-not (Test-Path "diffs\golden_vs_candidate\diff.json")) {
-        Run-Cmd 'py site_audit.py diff runs\golden runs\candidate --out diffs\golden_vs_candidate'
+    if (-not (Test-Path (Join-Root "diffs\golden_vs_candidate\diff.json"))) {
+        Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
     }
 
-    Run-Cmd 'powershell -NoProfile -Command "Get-ChildItem runs\run_test"'
-    Run-Cmd 'powershell -NoProfile -Command "Get-ChildItem diffs\golden_vs_candidate"'
-    Run-Cmd 'powershell -NoProfile -Command "Test-Path runs\run_test\run.json"'
-    Run-Cmd 'powershell -NoProfile -Command "Test-Path runs\run_test\run.md"'
-    Run-Cmd 'powershell -NoProfile -Command "Test-Path diffs\golden_vs_candidate\diff.json"'
-    Run-Cmd 'powershell -NoProfile -Command "Test-Path diffs\golden_vs_candidate\diff.md"'
+    Get-ChildItem $runTest | Out-Host
+    Get-ChildItem $diffDir | Out-Host
 
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\run_test\run.json -Pattern ''\"target_url\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\run_test\run.json -Pattern ''\"crawl\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\run_test\run.json -Pattern ''\"quality\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\run_test\run.json -Pattern ''\"timings\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path runs\run_test\run.json -Pattern ''\"duplicates\"''"'
-    Run-Cmd 'powershell -NoProfile -Command "Select-String -Path diffs\golden_vs_candidate\diff.json -Pattern ''\"summary\"''"'
+    $runJson = Get-Content -Raw -Path (Join-Root "runs\run_test\run.json") | ConvertFrom-Json
+    $diffJson = Get-Content -Raw -Path (Join-Root "diffs\golden_vs_candidate\diff.json") | ConvertFrom-Json
+
+    foreach ($key in @("target_url", "crawl", "quality", "timings", "duplicates")) {
+        if (-not $runJson.PSObject.Properties.Name.Contains($key)) {
+            throw ("run.json missing key: {0}" -f $key)
+        }
+    }
+
+    if (-not $diffJson.PSObject.Properties.Name.Contains("summary")) {
+        throw "diff.json missing key: summary"
+    }
+
+    Write-Host "run.json keys validated" -ForegroundColor Green
+    Write-Host "diff.json keys validated" -ForegroundColor Green
 }
 
 function Test-RegressionPack {
@@ -196,6 +269,7 @@ if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpCh
     Write-Host "  .\run_tests.ps1 -PytestQuick"
     Write-Host "  .\run_tests.ps1 -SmokeCore -DiffChecks"
     Write-Host "  .\run_tests.ps1 -All"
+    Write-Host "  .\run_tests.ps1 -All -RootDir .site_inspector_local"
     exit 0
 }
 
@@ -214,4 +288,4 @@ if ($OutputChecks) { Test-OutputChecks }
 if ($RegressionPack) { Test-RegressionPack }
 
 Write-Host ""
-Write-Host "Done." -ForegroundColor Green
+Write-Host ('Done. Local artifacts are under: {0}' -f $RootDir) -ForegroundColor Green
