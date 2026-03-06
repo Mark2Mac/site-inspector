@@ -15,6 +15,7 @@ from .reporting import build_run_md
 from .duplicates import detect_duplicate_pages, render_duplicate_summary_md
 from .template_clustering import cluster_urls, summarize_clusters
 from .dom_clustering import cluster_by_dom_fingerprint, summarize_dom_clusters
+from .seo_audit import audit_seo
 from .utils import (
     normalize_target,
     host_from_url,
@@ -378,6 +379,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     except Exception:
         dup = {"duplicate_groups": [], "duplicate_group_count": 0, "duplicate_url_count": 0}
     run_obj["duplicates"] = dup
+
+    # Milestone 3: first SEO auditing layer
+    try:
+        run_obj["seo"] = audit_seo(crawl, posture)
+    except Exception:
+        run_obj["seo"] = {"pages_analyzed": 0, "issues": []}
 
     safe_write_json(out_dir / "run.json", run_obj)
 

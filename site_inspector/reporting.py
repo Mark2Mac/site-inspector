@@ -154,6 +154,34 @@ def build_run_md(run: Dict[str, Any]) -> str:
         lines.append(f"- JS-disabled NOT readable pages: **{ex.get('pages_js_disabled_not_readable')}**\n")
         lines.append("Artifacts are under `playwright/`.\n")
 
+    seo = run.get("seo")
+    if seo:
+        lines.append("## SEO Auditing\n")
+        lines.append(f"- Pages analyzed: **{seo.get('pages_analyzed')}**")
+
+        meta = seo.get("metadata") or {}
+        canon = seo.get("canonicals") or {}
+        status = seo.get("status") or {}
+        links = seo.get("internal_linking") or {}
+        lines.append(f"- Missing titles: **{((meta.get('missing_title') or {}).get('count', 0))}**")
+        lines.append(f"- Duplicate title groups: **{((meta.get('duplicate_title_groups') or {}).get('count', 0))}**")
+        lines.append(f"- Missing meta descriptions: **{((meta.get('missing_meta_description') or {}).get('count', 0))}**")
+        lines.append(f"- Missing canonicals: **{((canon.get('missing') or {}).get('count', 0))}**")
+        lines.append(f"- Non-200 pages: **{((status.get('non_200') or {}).get('count', 0))}**")
+        lines.append(f"- Zero internal inlinks: **{((links.get('zero_inlinks') or {}).get('count', 0))}**\n")
+
+        issues = seo.get("issues") or []
+        if issues:
+            lines.append("### Top SEO issues\n")
+            for issue in issues[:8]:
+                examples = issue.get("examples") or []
+                ex_s = ", ".join(examples[:3])
+                if ex_s:
+                    lines.append(f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} page(s) e.g. {ex_s}")
+                else:
+                    lines.append(f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} page(s)")
+            lines.append("")
+
     lines.append("## Next steps\n")
     lines.append("- v0.5: AI readiness checks (llms.txt, JSON-LD validation, citations friendliness).")
     lines.append("- Optional gating: fail CI if too many pages are unreadable with JS disabled.\n")

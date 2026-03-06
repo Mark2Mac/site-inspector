@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from site_inspector.utils import clean_url, crawl_path_key, crawl_query_shape, query_shape_cap_exceeded, register_query_shape
+from site_inspector.utils import clean_url, crawl_path_key, crawl_query_shape, query_shape_cap_exceeded, register_query_shape, crawl_path_depth, path_depth_cap_exceeded
 
 
 def test_clean_url_normalizes_tracking_default_ports_and_query_order() -> None:
@@ -27,3 +27,10 @@ def test_query_shape_cap_ignores_tracking_keys() -> None:
 def test_crawl_path_key_collapses_duplicate_slashes() -> None:
     assert crawl_path_key("https://example.com//blog///post?page=1") == "/blog/post"
     assert crawl_query_shape("https://example.com//blog///post?page=1&sort=asc") == ("page", "sort")
+
+
+def test_crawl_path_depth_and_cap() -> None:
+    assert crawl_path_depth("https://example.com/") == 0
+    assert crawl_path_depth("https://example.com/blog/post") == 2
+    assert not path_depth_cap_exceeded("https://example.com/blog/post", max_depth=2)
+    assert path_depth_cap_exceeded("https://example.com/a/b/c/d/e/f/g", max_depth=6)

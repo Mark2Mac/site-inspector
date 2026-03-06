@@ -2,62 +2,68 @@
 
 ## Completed
 
--   A1--A6: Core crawler foundation
--   B0--B2: Analysis pipeline
--   B3: Duplicate detection (initial version)
+- A1--A6: Core crawler foundation
+- B0--B2: Analysis pipeline
+- B3: Duplicate detection hardening + validation
+- Milestone 0: Stability layer (CLI regression tests + golden schema checks)
+- Milestone 1: Duplicate detection reliability
+- Milestone 2: Crawl quality guardrails
+  - stronger URL normalization
+  - query-shape caps per path
+  - path-depth caps
+  - crawl metadata for guardrail hits
 
 ## Current Focus
 
-### Milestone 2 -- Crawl Quality
+### Milestone 3 -- SEO Auditing
 
-Improve crawl robustness without breaking the stabilized CLI:
-- stronger URL normalization guardrails
-- query-shape caps per path to reduce crawl explosion
-- cleaner expected-failure handling in the PowerShell runner
+Integrated initial SEO auditing layer:
+- metadata checks (titles, descriptions, H1s)
+- canonical checks
+- status code and redirect analysis
+- internal linking signals (zero inlinks/outlinks)
+
+Current focus now moves to Milestone 4.
 
 ## Milestones
 
 ### Milestone 0 -- Stability
-
-H1: CLI regression tests\
-H2: Golden output tests
+- H1: CLI regression tests
+- H2: Golden output tests
 
 ### Milestone 1 -- Duplicate Detection
-
-B3 hardening\
-B3 validation pass\
-B3 reporting refinement
+- B3 hardening
+- B3 validation pass
+- B3 reporting refinement
 
 ### Milestone 2 -- Crawl Quality
-
-URL normalization improvements\
-Retry/timeout handling\
-Crawl stability
+- URL normalization improvements
+- query-shape caps per path
+- path-depth caps
+- crawl stability guardrails
 
 ### Milestone 3 -- SEO Auditing
-
-Metadata checks\
-Status code & redirect analysis\
-Internal linking signals
+- metadata checks
+- canonical checks
+- status code & redirect analysis
+- internal linking signals
+- initial SEO reporting layer ✅
 
 ### Milestone 4 -- AI Crawler Optimization
-
-Robots.txt analysis\
-Sitemap health checks\
-JS accessibility signals
+- robots.txt analysis
+- sitemap health checks
+- JS accessibility signals
 
 ### Milestone 5 -- Reporting & Developer Experience
-
-Report layout improvements\
-CLI usability improvements\
-Packaging and versioning
+- report layout improvements
+- CLI usability improvements
+- packaging and versioning
 
 ## Target Outcome
 
-A Windows‑first CLI tool capable of:
-
--   crawling and analyzing websites
--   detecting structural SEO issues
--   identifying duplicate content clusters
--   evaluating AI crawler accessibility
--   generating structured audit reports
+A Windows-first CLI tool capable of:
+- crawling and analyzing websites
+- detecting structural SEO issues
+- identifying duplicate content clusters
+- evaluating AI crawler accessibility
+- generating structured audit reports

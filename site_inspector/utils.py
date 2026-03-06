@@ -254,6 +254,24 @@ def crawl_query_shape(url: str) -> Tuple[str, ...]:
     return tuple(sorted(keys))
 
 
+def crawl_path_depth(url: str) -> int:
+    """Normalized path depth used by crawl guardrails.
+
+    Examples:
+    - / -> 0
+    - /blog -> 1
+    - /blog/post -> 2
+    """
+    path = crawl_path_key(url)
+    parts = [p for p in path.split("/") if p]
+    return len(parts)
+
+
+def path_depth_cap_exceeded(url: str, *, max_depth: int) -> bool:
+    """Whether *url* exceeds the allowed normalized path depth."""
+    return crawl_path_depth(url) > max(0, int(max_depth))
+
+
 def query_shape_cap_exceeded(
     url: str,
     shapes_by_path: Dict[str, Set[Tuple[str, ...]]],

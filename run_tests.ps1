@@ -49,36 +49,42 @@ function Ensure-Dirs {
     New-Item -ItemType Directory -Force -Path (Join-Root "budgets") | Out-Null
 }
 
-function Expect-NativeFailure([string]$label, [scriptblock]$block, [string[]]$Needles = @()) {
-    Write-Host "PS> $label" -ForegroundColor DarkGray
+function Expect-NativeFailure {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [string[]]$Needles = @()
+    )
 
-    $prevNativePref = $null
-    if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
-        $prevNativePref = $PSNativeCommandUseErrorActionPreference
-        $script:PSNativeCommandUseErrorActionPreference = $false
+    Write-Host "PS> $Label" -ForegroundColor DarkGray
+    Ensure-Dirs
+
+    $id = [guid]::NewGuid().ToString("N")
+    $stdoutPath = Join-Root ("logs\expected_failure_" + $id + ".stdout.txt")
+    $stderrPath = Join-Root ("logs\expected_failure_" + $id + ".stderr.txt")
+
+    $proc = Start-Process -FilePath $FilePath -ArgumentList $Arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $output = ""
+    if (Test-Path $stdoutPath) {
+        $output += (Get-Content -Raw -Path $stdoutPath)
+    }
+    if (Test-Path $stderrPath) {
+        if ($output) { $output += "`n" }
+        $output += (Get-Content -Raw -Path $stderrPath)
     }
 
-    try {
-        $output = (& $block 2>&1 | Out-String)
-        $exitCode = $LASTEXITCODE
-    }
-    finally {
-        if ($null -ne $prevNativePref) {
-            $script:PSNativeCommandUseErrorActionPreference = $prevNativePref
-        }
-    }
-
-    if ($exitCode -eq 0) {
-        throw ("Command unexpectedly succeeded: {0}" -f $label)
+    if ($proc.ExitCode -eq 0) {
+        throw ("Command unexpectedly succeeded: {0}" -f $Label)
     }
 
     foreach ($needle in $Needles) {
-        if ($output -notmatch [regex]::Escape($needle)) {
-            throw ("Expected failure output missing text '{0}' for command: {1}`nActual output:`n{2}" -f $needle, $label, $output)
+        if (-not $output.Contains($needle)) {
+            throw ("Expected failure output missing text '{0}' for command: {1}`nActual output:`n{2}" -f $needle, $Label, $output)
         }
     }
 
-    Write-Host ("Expected failure observed (exit {0})" -f $exitCode) -ForegroundColor Yellow
+    Write-Host ("Expected failure observed (exit {0})" -f $proc.ExitCode) -ForegroundColor Yellow
 }
 
 function Write-LooseBudget {
@@ -158,7 +164,7 @@ function Test-DuplicateChecks {
     Ensure-Dirs
     Write-Step "Running duplicate/B3 checks"
     $dupRun = Join-Root "runs\dup_test"
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages 10 --skip-playwright --out "{1}"' -f $Site, $dupRun)
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages 10 --skip-playwright --out "{2}"' -f $Site, 10, $dupRun)
 
     $jsonPath = Join-Root "runs\dup_test\run.json"
     $json = Get-Content -Raw -Path $jsonPath | ConvertFrom-Json
@@ -199,17 +205,23 @@ function Test-ErrorChecks {
     New-Item -ItemType Directory -Force -Path (Join-Root "runs\empty_test") | Out-Null
     Write-Host "These commands are expected to fail with a human-readable error." -ForegroundColor Yellow
 
-    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
-        py site_audit.py diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
-    } @('run.json not found for', 'run.json file directly')
+    Expect-NativeFailure `
+        -Label ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) `
+        -FilePath 'py' `
+        -Arguments @('site_audit.py', 'diff', (Join-Root "runs\does_not_exist"), $candidate, '--out', (Join-Root "diffs\bad_left")) `
+        -Needles @('run.json not found for', 'run.json file directly')
 
-    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
-        py site_audit.py diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
-    } @('run.json not found for', 'run.json file directly')
+    Expect-NativeFailure `
+        -Label ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) `
+        -FilePath 'py' `
+        -Arguments @('site_audit.py', 'diff', $candidate, (Join-Root "runs\does_not_exist"), '--out', (Join-Root "diffs\bad_right")) `
+        -Needles @('run.json not found for', 'run.json file directly')
 
-    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
-        py site_audit.py diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
-    } @('run.json not found for', 'run.json file directly')
+    Expect-NativeFailure `
+        -Label ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) `
+        -FilePath 'py' `
+        -Arguments @('site_audit.py', 'diff', (Join-Root "runs\empty_test"), $candidate, '--out', (Join-Root "diffs\bad_empty")) `
+        -Needles @('run.json not found for', 'run.json file directly')
 }
 
 function Test-BudgetChecks {
@@ -248,7 +260,7 @@ function Test-OutputChecks {
     $runJson = Get-Content -Raw -Path (Join-Root "runs\run_test\run.json") | ConvertFrom-Json
     $diffJson = Get-Content -Raw -Path (Join-Root "diffs\golden_vs_candidate\diff.json") | ConvertFrom-Json
 
-    foreach ($key in @("target_url", "crawl", "quality", "timings", "duplicates")) {
+    foreach ($key in @("target_url", "crawl", "quality", "timings", "duplicates", "seo")) {
         if (-not $runJson.PSObject.Properties.Name.Contains($key)) {
             throw ("run.json missing key: {0}" -f $key)
         }

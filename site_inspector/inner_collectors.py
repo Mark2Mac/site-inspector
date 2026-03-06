@@ -250,6 +250,30 @@ def collect_links(url: str, timeout: int = 20):
         soup = BeautifulSoup(html, "html.parser")
         links = extract_same_host_links(soup, r.url, base_host)
 
+        title = (soup.title.string.strip() if soup.title and soup.title.string else None)
+        meta_description = None
+        meta_robots = None
+        for m in soup.find_all("meta"):
+            name = (m.get("name") or "").strip().lower()
+            if name == "description" and not meta_description:
+                meta_description = (m.get("content") or "").strip() or None
+            if name == "robots" and not meta_robots:
+                meta_robots = (m.get("content") or "").strip() or None
+
+        canonical = None
+        for l in soup.find_all("link"):
+            rel = l.get("rel") or []
+            rels = [str(x).strip().lower() for x in (rel if isinstance(rel, list) else [rel])]
+            if "canonical" in rels and l.get("href"):
+                canonical = urllib.parse.urljoin(r.url, l.get("href")).strip()
+                break
+
+        h1_texts = []
+        for h1 in soup.find_all("h1"):
+            txt = " ".join(h1.get_text(" ", strip=True).split()).strip()
+            if txt:
+                h1_texts.append(txt)
+
         fp = None
         fp_nodes = None
         # Best-effort fingerprint only for HTML-ish content.
@@ -262,7 +286,15 @@ def collect_links(url: str, timeout: int = 20):
         return {
             "url_final": r.url,
             "status_code": r.status_code,
+            "redirect_count": len(r.history or []),
             "links": links,
+            "internal_link_count": len(links),
+            "title": title,
+            "meta_description": meta_description,
+            "meta_robots": meta_robots,
+            "canonical": canonical,
+            "h1_count": len(h1_texts),
+            "h1_texts": h1_texts[:3],
             "dom_fingerprint": fp,
             "dom_fingerprint_nodes": fp_nodes,
             "error": None,
@@ -271,7 +303,15 @@ def collect_links(url: str, timeout: int = 20):
         return {
             "url_final": None,
             "status_code": None,
+            "redirect_count": 0,
             "links": [],
+            "internal_link_count": 0,
+            "title": None,
+            "meta_description": None,
+            "meta_robots": None,
+            "canonical": None,
+            "h1_count": 0,
+            "h1_texts": [],
             "dom_fingerprint": None,
             "dom_fingerprint_nodes": None,
             "error": str(e),

@@ -23,6 +23,7 @@ from .utils import (
     stable_page_id,
     query_shape_cap_exceeded,
     register_query_shape,
+    path_depth_cap_exceeded,
 )
 
 
@@ -105,6 +106,8 @@ def discover_pages(
     query_shapes_by_path: Dict[str, Set[Tuple[str, ...]]] = {}
     query_shape_cap_hits = 0
     query_shape_cap_per_path = 3
+    max_path_depth = 6
+    path_depth_cap_hits = 0
 
     tmp_root, py, pip = make_temp_venv()
 
@@ -123,13 +126,16 @@ def discover_pages(
 
 
     def _accept_candidate(url: str) -> str | None:
-        nonlocal query_shape_cap_hits
+        nonlocal query_shape_cap_hits, path_depth_cap_hits
         u = clean_url(url)
         if not u:
             return None
         if not is_same_host(u, host):
             return None
         if not looks_like_html_path(u):
+            return None
+        if path_depth_cap_exceeded(u, max_depth=max_path_depth):
+            path_depth_cap_hits += 1
             return None
         if query_shape_cap_exceeded(u, query_shapes_by_path, max_shapes_per_path=query_shape_cap_per_path):
             query_shape_cap_hits += 1
@@ -171,7 +177,7 @@ def discover_pages(
             counter["i"] += 1
             return f"links_{counter['i']:05d}"
 
-    def _fetch_links(url: str) -> Tuple[str, List[str], int | None, str | None]:
+    def _fetch_links(url: str) -> Tuple[str, List[str], int | None, str | None, Dict[str, Any]]:
         tag = _next_tag()
 
         # Per-page cache: if present, skip network work.
@@ -188,7 +194,19 @@ def discover_pages(
                 u = clean_url(u)
                 if u:
                     cleaned.append(u)
-            return url, cleaned, status, err
+            meta = {
+                "url_final": cached.get("url_final"),
+                "redirect_count": cached.get("redirect_count") or 0,
+                "title": cached.get("title"),
+                "meta_description": cached.get("meta_description"),
+                "meta_robots": cached.get("meta_robots"),
+                "canonical": cached.get("canonical"),
+                "h1_count": cached.get("h1_count") or 0,
+                "h1_texts": cached.get("h1_texts") or [],
+                "internal_link_count": cached.get("internal_link_count") or len(cleaned),
+                "outgoing_internal_links": cleaned,
+            }
+            return url, cleaned, status, err, meta
 
         host_sem.acquire()
         try:
@@ -208,6 +226,18 @@ def discover_pages(
         err = data.get("error") or None
         fp = data.get("dom_fingerprint")
         fp_nodes = data.get("dom_fingerprint_nodes")
+        meta = {
+            "url_final": data.get("url_final"),
+            "redirect_count": data.get("redirect_count") or 0,
+            "title": data.get("title"),
+            "meta_description": data.get("meta_description"),
+            "meta_robots": data.get("meta_robots"),
+            "canonical": data.get("canonical"),
+            "h1_count": data.get("h1_count") or 0,
+            "h1_texts": data.get("h1_texts") or [],
+            "internal_link_count": data.get("internal_link_count") or len(cleaned),
+            "outgoing_internal_links": cleaned,
+        }
 
         # Persist per-page cache.
         try:
@@ -217,9 +247,18 @@ def discover_pages(
                 {
                     "url": url,
                     "fetched_at": now_iso(),
+                    "url_final": data.get("url_final"),
                     "status_code": status,
+                    "redirect_count": data.get("redirect_count") or 0,
                     "error": err,
                     "links": cleaned,
+                    "internal_link_count": data.get("internal_link_count") or len(cleaned),
+                    "title": data.get("title"),
+                    "meta_description": data.get("meta_description"),
+                    "meta_robots": data.get("meta_robots"),
+                    "canonical": data.get("canonical"),
+                    "h1_count": data.get("h1_count") or 0,
+                    "h1_texts": data.get("h1_texts") or [],
                     "dom_fingerprint": fp,
                     "dom_fingerprint_nodes": fp_nodes,
                 },
@@ -228,7 +267,7 @@ def discover_pages(
             # Cache is best-effort; never fail the crawl for it.
             pass
 
-        return url, cleaned, status, err
+        return url, cleaned, status, err, meta
 
     in_flight = set()
     futures = {}
@@ -252,13 +291,14 @@ def discover_pages(
                         in_flight.discard(src)
 
                     try:
-                        _, links, status, err = fut.result()
+                        _, links, status, err, meta = fut.result()
                         if err:
                             crawl_errors.append({"url": src or "", "stage": "links", "error": err, "status_code": status})
                     except Exception as e:
                         # If one page fails, continue (scalability-friendly)
                         crawl_errors.append({"url": src or "", "stage": "links", "error": str(e), "status_code": None})
                         links = []
+                        meta = {}
 
                     # Add new candidates
                     for raw_u in links:
@@ -292,14 +332,36 @@ def discover_pages(
     for u in discovered[:max_pages]:
         pid = stable_page_id(u)
         fp = None
+        status = None
+        err = None
+        page_meta: Dict[str, Any] = {}
         try:
             cache_path = out_dir / "raw" / "pages" / pid / "links.json"
             if cache_path.exists():
                 cached = load_json_if_exists(str(cache_path)) or {}
                 fp = cached.get("dom_fingerprint")
+                status = cached.get("status_code")
+                err = cached.get("error")
+                page_meta = {
+                    "final_url": cached.get("url_final"),
+                    "redirect_count": cached.get("redirect_count") or 0,
+                    "title": cached.get("title"),
+                    "meta_description": cached.get("meta_description"),
+                    "meta_robots": cached.get("meta_robots"),
+                    "canonical": cached.get("canonical"),
+                    "h1_count": cached.get("h1_count") or 0,
+                    "h1_texts": cached.get("h1_texts") or [],
+                    "internal_link_count": cached.get("internal_link_count") or 0,
+                    "outgoing_internal_links": cached.get("links") or [],
+                }
         except Exception:
             fp = None
-        pages.append({"url": u, "page_id": pid, "dom_fingerprint": fp})
+            status = None
+            err = None
+            page_meta = {}
+        page_row = {"url": u, "page_id": pid, "dom_fingerprint": fp, "status_code": status, "error": err}
+        page_row.update(page_meta)
+        pages.append(page_row)
 
     return {
         "target_url": target_url,
@@ -314,6 +376,8 @@ def discover_pages(
             "resume": bool(resume),
             "query_shape_cap_per_path": query_shape_cap_per_path,
             "query_shape_cap_hits": query_shape_cap_hits,
+            "max_path_depth": max_path_depth,
+            "path_depth_cap_hits": path_depth_cap_hits,
         },
         "errors": crawl_errors,
         "pages": pages,
