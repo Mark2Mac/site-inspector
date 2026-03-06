@@ -1,0 +1,13 @@
+{
+  "required_top_keys": [
+    "target",
+    "crawl",
+    "posture",
+    "lighthouse",
+    "playwright",
+    "duplicates",
+    "template_clusters",
+    "dom_clusters",
+    "generated_at"
+  ]
+}

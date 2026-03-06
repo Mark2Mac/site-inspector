@@ -298,11 +298,23 @@ if __name__ == "__main__":
 
 # -----------------------------
 def make_temp_venv() -> Tuple[Path, Path, Path]:
-    tmp_root = Path(tempfile.mkdtemp(prefix="inspect_venv_"))
-    venv_dir = tmp_root / "venv"
-    rc, _, se = _run([sys.executable, "-m", "venv", str(venv_dir)])
-    if rc != 0:
-        raise RuntimeError(f"Failed to create venv: {se}")
+    """Create a reusable inner collector venv.
+
+    Why this exists:
+    - creating a brand new venv on every crawl is very slow on Windows
+    - users may think the CLI is stuck and interrupt it mid-bootstrap
+
+    We keep a stable per-Python-version venv in the system temp dir.
+    """
+    cache_root = Path(tempfile.gettempdir()) / "site_inspector_runtime"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    version_tag = f"py{sys.version_info.major}{sys.version_info.minor}"
+    venv_dir = cache_root / f"inner_{version_tag}"
+
+    if not venv_dir.exists():
+        rc, _, se = _run([sys.executable, "-m", "venv", str(venv_dir)], timeout=900)
+        if rc != 0:
+            raise RuntimeError(f"Failed to create venv: {se}")
 
     if platform.system().lower().startswith("win"):
         py = venv_dir / "Scripts" / "python.exe"
@@ -311,7 +323,13 @@ def make_temp_venv() -> Tuple[Path, Path, Path]:
         py = venv_dir / "bin" / "python"
         pip = venv_dir / "bin" / "pip"
 
-    return tmp_root, py, pip
+    if not py.exists() or not pip.exists():
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        rc, _, se = _run([sys.executable, "-m", "venv", str(venv_dir)], timeout=900)
+        if rc != 0:
+            raise RuntimeError(f"Failed to recreate venv: {se}")
+
+    return cache_root, py, pip
 
 
 def run_inner(py: Path, tmp_root: Path, mode: str, url: str, timeout_s: int, out_raw_dir: Path, tag: str) -> Dict[str, Any]:

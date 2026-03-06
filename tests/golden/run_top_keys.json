@@ -1,0 +1,13 @@
+{
+  "required_top_keys": [
+    "version",
+    "generated_at",
+    "target_url",
+    "host",
+    "crawl",
+    "posture",
+    "quality",
+    "timings",
+    "duplicates"
+  ]
+}
