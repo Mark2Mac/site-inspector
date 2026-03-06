@@ -19,6 +19,7 @@ def _url_path_key(url: str) -> str:
 
 
 def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Detect duplicate candidates by DOM fingerprint if available, else normalized path."""
     by_key: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     for page in pages or []:
@@ -77,9 +78,7 @@ def render_duplicate_summary_md(dup: Dict[str, Any]) -> str:
     ]
 
     for group in groups[:20]:
-        lines.append(
-            f"- **{group['count']} pages** via `{group['method']}` ({group['key']})"
-        )
+        lines.append(f"- **{group['count']} pages** via `{group['method']}` ({group['key']})")
         for url in group["urls"][:5]:
             lines.append(f"  - {url}")
         if len(group["urls"]) > 5:
