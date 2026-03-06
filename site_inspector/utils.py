@@ -129,7 +129,8 @@ def load_json_if_exists(path: Optional[str]) -> Optional[Dict[str, Any]]:
     if not p.exists():
         print(f"[warn] JSON file not found: {p} — using defaults", file=sys.stderr)
         return None
-    return json.loads(p.read_text(encoding="utf-8"))
+    # Accept both plain UTF-8 and UTF-8 with BOM to keep CLI budget loading robust on Windows.
+    return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
 def normalize_target(target: str) -> str:

@@ -49,13 +49,22 @@ function Ensure-Dirs {
     New-Item -ItemType Directory -Force -Path (Join-Root "budgets") | Out-Null
 }
 
-function Expect-NativeFailure([string]$label, [scriptblock]$block) {
+function Expect-NativeFailure([string]$label, [scriptblock]$block, [string[]]$Needles = @()) {
     Write-Host "PS> $label" -ForegroundColor DarkGray
-    & $block
-    if ($LASTEXITCODE -eq 0) {
+    $output = (& $block 2>&1 | Out-String)
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -eq 0) {
         throw ("Command unexpectedly succeeded: {0}" -f $label)
     }
-    Write-Host ("Expected failure observed (exit {0})" -f $LASTEXITCODE) -ForegroundColor Yellow
+
+    foreach ($needle in $Needles) {
+        if ($output -notmatch [regex]::Escape($needle)) {
+            throw ("Expected failure output missing text '{0}' for command: {1}" -f $needle, $label)
+        }
+    }
+
+    Write-Host ("Expected failure observed (exit {0})" -f $exitCode) -ForegroundColor Yellow
 }
 
 function Write-LooseBudget {
@@ -63,14 +72,16 @@ function Write-LooseBudget {
     $budgetPath = Join-Root "budgets\loose_budget.json"
     $budgetObj = @{
         categories = @{
-            performance     = @{ min_score = 0.00 }
-            seo             = @{ min_score = 0.00 }
-            accessibility   = @{ min_score = 0.00 }
+            performance      = @{ min_score = 0.00 }
+            seo              = @{ min_score = 0.00 }
+            accessibility    = @{ min_score = 0.00 }
             "best-practices" = @{ min_score = 0.00 }
         }
         audits = @{}
     }
-    $budgetObj | ConvertTo-Json -Depth 5 | Set-Content -Path $budgetPath -Encoding UTF8
+    $json = $budgetObj | ConvertTo-Json -Depth 5
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($budgetPath, $json, $utf8NoBom)
     return $budgetPath
 }
 
@@ -176,15 +187,15 @@ function Test-ErrorChecks {
 
     Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
         py site_audit.py diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
-    }
+    } @('run.json not found for', 'run directory')
 
     Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
         py site_audit.py diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
-    }
+    } @('run.json not found for', 'run directory')
 
     Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
         py site_audit.py diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
-    }
+    } @('run.json not found for', 'run directory')
 }
 
 function Test-BudgetChecks {
