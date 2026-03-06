@@ -58,7 +58,7 @@ import xml.etree.ElementTree as ET
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import hashlib
 
@@ -229,6 +229,55 @@ def clean_url(url: str) -> str:
         query = p.query or ""
 
     return urllib.parse.urlunparse((scheme, netloc, p.path or "", p.params or "", query, fragment)).strip()
+
+
+
+def crawl_path_key(url: str) -> str:
+    """Normalized path bucket used for crawl guardrails."""
+    p = urllib.parse.urlparse(clean_url(url))
+    path = p.path or "/"
+    if not path.startswith("/"):
+        path = "/" + path
+    path = re.sub(r"/{2,}", "/", path)
+    return path
+
+
+def crawl_query_shape(url: str) -> Tuple[str, ...]:
+    """Stable query-key signature used to cap crawl explosion per path."""
+    p = urllib.parse.urlparse(clean_url(url))
+    keys: List[str] = []
+    for k, _v in urllib.parse.parse_qsl(p.query or "", keep_blank_values=True):
+        kl = (k or "").lower()
+        if kl.startswith("utm_") or kl in _TRACKING_QUERY_KEYS:
+            continue
+        keys.append(kl)
+    return tuple(sorted(keys))
+
+
+def query_shape_cap_exceeded(
+    url: str,
+    shapes_by_path: Dict[str, Set[Tuple[str, ...]]],
+    *,
+    max_shapes_per_path: int,
+) -> bool:
+    """Whether *url* would exceed the allowed number of query shapes for its path."""
+    shape = crawl_query_shape(url)
+    if not shape:
+        return False
+    path_key = crawl_path_key(url)
+    shapes = shapes_by_path.get(path_key) or set()
+    return shape not in shapes and len(shapes) >= max(1, int(max_shapes_per_path))
+
+
+def register_query_shape(
+    url: str,
+    shapes_by_path: Dict[str, Set[Tuple[str, ...]]],
+) -> None:
+    """Record the query shape of *url* for later guardrail checks."""
+    path_key = crawl_path_key(url)
+    shape = crawl_query_shape(url)
+    bucket = shapes_by_path.setdefault(path_key, set())
+    bucket.add(shape)
 
 def looks_like_html_path(url: str) -> bool:
     p = urllib.parse.urlparse(url)

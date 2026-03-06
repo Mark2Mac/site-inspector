@@ -51,8 +51,22 @@ function Ensure-Dirs {
 
 function Expect-NativeFailure([string]$label, [scriptblock]$block, [string[]]$Needles = @()) {
     Write-Host "PS> $label" -ForegroundColor DarkGray
-    $output = (& $block 2>&1 | Out-String)
-    $exitCode = $LASTEXITCODE
+
+    $prevNativePref = $null
+    if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+        $prevNativePref = $PSNativeCommandUseErrorActionPreference
+        $script:PSNativeCommandUseErrorActionPreference = $false
+    }
+
+    try {
+        $output = (& $block 2>&1 | Out-String)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        if ($null -ne $prevNativePref) {
+            $script:PSNativeCommandUseErrorActionPreference = $prevNativePref
+        }
+    }
 
     if ($exitCode -eq 0) {
         throw ("Command unexpectedly succeeded: {0}" -f $label)
@@ -60,7 +74,7 @@ function Expect-NativeFailure([string]$label, [scriptblock]$block, [string[]]$Ne
 
     foreach ($needle in $Needles) {
         if ($output -notmatch [regex]::Escape($needle)) {
-            throw ("Expected failure output missing text '{0}' for command: {1}" -f $needle, $label)
+            throw ("Expected failure output missing text '{0}' for command: {1}`nActual output:`n{2}" -f $needle, $label, $output)
         }
     }
 
@@ -187,15 +201,15 @@ function Test-ErrorChecks {
 
     Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
         py site_audit.py diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
-    } @('run.json not found for', 'run directory')
+    } @('run.json not found for', 'run.json file directly')
 
     Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
         py site_audit.py diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
-    } @('run.json not found for', 'run directory')
+    } @('run.json not found for', 'run.json file directly')
 
     Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
         py site_audit.py diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
-    } @('run.json not found for', 'run directory')
+    } @('run.json not found for', 'run.json file directly')
 }
 
 function Test-BudgetChecks {

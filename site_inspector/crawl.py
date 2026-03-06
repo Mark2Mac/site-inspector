@@ -21,6 +21,8 @@ from .utils import (
     safe_write_json,
     load_json_if_exists,
     stable_page_id,
+    query_shape_cap_exceeded,
+    register_query_shape,
 )
 
 
@@ -100,6 +102,9 @@ def discover_pages(
 
     pages: List[Dict[str, Any]] = []
     discovered: List[str] = []
+    query_shapes_by_path: Dict[str, Set[Tuple[str, ...]]] = {}
+    query_shape_cap_hits = 0
+    query_shape_cap_per_path = 3
 
     tmp_root, py, pip = make_temp_venv()
 
@@ -115,6 +120,22 @@ def discover_pages(
     safe_write(raw_dir / "pip_install.stdout.txt", so)
     safe_write(raw_dir / "pip_install.stderr.txt", se)
 
+
+
+    def _accept_candidate(url: str) -> str | None:
+        nonlocal query_shape_cap_hits
+        u = clean_url(url)
+        if not u:
+            return None
+        if not is_same_host(u, host):
+            return None
+        if not looks_like_html_path(u):
+            return None
+        if query_shape_cap_exceeded(u, query_shapes_by_path, max_shapes_per_path=query_shape_cap_per_path):
+            query_shape_cap_hits += 1
+            return None
+        return u
+
     # Seed posture: try to read sitemap
     base_posture = run_inner(py, tmp_root, "posture", target_url, timeout_s, raw_dir, "posture_seed")
     sitemap_text = None
@@ -123,20 +144,24 @@ def discover_pages(
         sitemap_text = sm.get("text")
 
     if sitemap_text:
-        for u in parse_sitemap_xml(sitemap_text):
-            u = clean_url(u)
-            if is_same_host(u, host) and looks_like_html_path(u):
-                discovered.append(u)
+        for raw_u in parse_sitemap_xml(sitemap_text):
+            u = _accept_candidate(raw_u)
+            if not u or u in discovered:
+                continue
+            discovered.append(u)
+            register_query_shape(u, query_shapes_by_path)
 
     # Concurrent BFS
     visited: Set[str] = set(discovered)
     q: deque[str] = deque()
 
     # Always include target first
-    if target_url not in visited:
-        visited.add(target_url)
-        discovered.insert(0, target_url)
-    q.append(target_url)
+    target_clean = clean_url(target_url)
+    if target_clean not in visited:
+        visited.add(target_clean)
+        discovered.insert(0, target_clean)
+        register_query_shape(target_clean, query_shapes_by_path)
+    q.append(target_clean)
 
     lock = threading.Lock()
     counter = {"i": 0}
@@ -236,17 +261,17 @@ def discover_pages(
                         links = []
 
                     # Add new candidates
-                    for u in links:
+                    for raw_u in links:
                         if len(discovered) >= max_pages:
                             break
-                        if not is_same_host(u, host):
-                            continue
-                        if not looks_like_html_path(u):
+                        u = _accept_candidate(raw_u)
+                        if not u:
                             continue
                         with lock:
                             if u in visited:
                                 continue
                             visited.add(u)
+                            register_query_shape(u, query_shapes_by_path)
                             discovered.append(u)
                             q.append(u)
 
@@ -287,6 +312,8 @@ def discover_pages(
             "workers": cw,
             "host_inflight_limit": host_inflight_limit,
             "resume": bool(resume),
+            "query_shape_cap_per_path": query_shape_cap_per_path,
+            "query_shape_cap_hits": query_shape_cap_hits,
         },
         "errors": crawl_errors,
         "pages": pages,

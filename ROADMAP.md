@@ -8,10 +8,12 @@
 
 ## Current Focus
 
-### B3 Hardening
+### Milestone 2 -- Crawl Quality
 
-Improve reliability of duplicate detection: - confidence scoring -
-query/path noise filtering - validation heuristics - clearer validation output
+Improve crawl robustness without breaking the stabilized CLI:
+- stronger URL normalization guardrails
+- query-shape caps per path to reduce crawl explosion
+- cleaner expected-failure handling in the PowerShell runner
 
 ## Milestones
 
