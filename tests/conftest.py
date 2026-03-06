@@ -10,7 +10,7 @@ import pytest
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
-    def log_message(self, format, *args):  # noqa: A003
+    def log_message(self, format, *args):
         return
 
 
@@ -24,7 +24,7 @@ def _free_port() -> int:
 def fixture_site_url() -> str:
     root = Path(__file__).parent / "fixtures" / "site"
     port = _free_port()
-    handler = lambda *args, **kwargs: QuietHandler(*args, directory=str(root), **kwargs)  # noqa: E731
+    handler = lambda *args, **kwargs: QuietHandler(*args, directory=str(root), **kwargs)
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

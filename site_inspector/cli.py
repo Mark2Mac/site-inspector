@@ -25,6 +25,25 @@ from .utils import (
 )
 
 
+def _safe_console_print(message: str) -> None:
+    try:
+        print(message)
+        return
+    except UnicodeEncodeError:
+        pass
+
+    stream = getattr(sys, "stdout", None)
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    fallback = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    print(fallback)
+
+
+def _print_generated_block(label: str, paths: list[Path]) -> None:
+    _safe_console_print(f"✅ {label}:")
+    for path in paths:
+        _safe_console_print(f"- {path}")
+
+
 # -----------------------------
 # Commands
 # -----------------------------
@@ -55,7 +74,7 @@ def cmd_crawl(args: argparse.Namespace) -> int:
 
     safe_write_json(out_dir / "pages.json", crawl)
 
-    print(f"✅ Crawl saved: {out_dir / 'pages.json'}")
+    _print_generated_block("Crawl saved", [out_dir / "pages.json"])
     return 0
 
 
@@ -373,9 +392,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         pass
     safe_write(out_dir / "run.md", md)
 
-    print("✅ Run generated:")
-    print(f"- {out_dir / 'run.md'}")
-    print(f"- {out_dir / 'run.json'}")
+    _print_generated_block("Run generated", [out_dir / "run.md", out_dir / "run.json"])
 
     return 0
 
@@ -399,9 +416,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
     safe_write_json(out_dir / "diff.json", diff)
     safe_write(out_dir / "diff.md", render_diff_md(diff))
 
-    print("✅ Diff generated:")
-    print(f"- {out_dir / 'diff.md'}")
-    print(f"- {out_dir / 'diff.json'}")
+    _print_generated_block("Diff generated", [out_dir / "diff.md", out_dir / "diff.json"])
 
     return 0
 

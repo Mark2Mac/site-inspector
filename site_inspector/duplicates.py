@@ -19,20 +19,11 @@ def _url_path_key(url: str) -> str:
 
 
 def _cleanish_url(url: str) -> str:
-    """A 'mostly-stable' URL identity used only for duplicate heuristics.
-
-    - lowercases scheme + host
-    - strips default ports
-    - strips fragment
-    - strips trailing slash on path
-    - keeps query *out* (queries often represent real page variants)
-    """
     try:
         p = urlparse(url)
         scheme = (p.scheme or "").lower()
         host = (p.hostname or "").lower()
         port = p.port
-        # Remove default ports.
         if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
             port = None
         netloc = host if not port else f"{host}:{port}"
@@ -42,16 +33,31 @@ def _cleanish_url(url: str) -> str:
         return url
 
 
+def _confidence_bucket(confidence: float) -> str:
+    if confidence >= 0.8:
+        return "high"
+    if confidence >= 0.5:
+        return "medium"
+    return "low"
+
+
+def _validation_for_groups(groups: List[Dict[str, Any]], ignored: int) -> Dict[str, Any]:
+    high = [g for g in groups if (g.get("confidence") or 0) >= 0.8]
+    medium = [g for g in groups if 0.5 <= (g.get("confidence") or 0) < 0.8]
+    low = [g for g in groups if (g.get("confidence") or 0) < 0.5]
+    review = [g.get("key") for g in groups if (g.get("confidence") or 0) < 0.5 or g.get("method") != "dom_fingerprint"]
+    return {
+        "high_confidence_groups": len(high),
+        "medium_confidence_groups": len(medium),
+        "low_confidence_groups": len(low),
+        "ignored_noisy_groups": int(ignored or 0),
+        "actionable_groups": len(high) + len(medium),
+        "manual_review_groups": len(review),
+        "manual_review_keys": review[:20],
+    }
+
+
 def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Detect duplicate *candidates*.
-
-    Heuristics:
-    - Prefer DOM fingerprint groups (high confidence).
-    - Fallback to normalized path groups only when it looks like superficial URL variance
-      (e.g., trailing slash / casing) and *avoid* query-driven 'duplicates' unless the
-      group is large (queries are commonly real variants).
-    """
-
     by_key: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     for page in pages or []:
@@ -60,6 +66,7 @@ def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
             continue
 
         fp = page.get("dom_fingerprint")
+        title = _normalized_text(str(page.get("title") or page.get("meta_title") or ""))
         if fp:
             key = f"dom:{fp}"
         else:
@@ -70,6 +77,7 @@ def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "url": url,
                 "page_id": page.get("page_id"),
                 "dom_fingerprint": fp,
+                "title": title,
             }
         )
 
@@ -82,22 +90,21 @@ def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         urls = [it["url"] for it in items]
         page_ids = [it.get("page_id") for it in items if it.get("page_id")]
+        titles = sorted({it.get("title") for it in items if it.get("title")})
 
         method = "dom_fingerprint" if key.startswith("dom:") else "normalized_path"
-
         confidence = 0.0
         notes: List[str] = []
 
         if method == "dom_fingerprint":
             confidence = 0.9
             notes.append("same DOM fingerprint")
+            if len(titles) == 1 and titles:
+                notes.append("matching titles")
         else:
-            # Path-only groups are risky: queries often represent real variants.
             has_query = any("?" in (u or "") for u in urls)
             cleanish = {_cleanish_url(u) for u in urls}
             distinct_full = len(set(urls))
-
-            # If URLs collapse to the same cleanish identity, it's more likely superficial.
             if len(cleanish) == 1 and distinct_full > 1:
                 if has_query:
                     confidence = 0.35
@@ -106,18 +113,19 @@ def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
                     confidence = 0.65
                     notes.append("same path; superficial URL variance")
             else:
-                # Different cleanish identities => probably not duplicates.
                 confidence = 0.2
                 notes.append("path match only (weak signal)")
 
-            # Hardening: ignore tiny, query-driven groups (too many false positives).
+            if len(titles) == 1 and titles:
+                confidence = min(0.75, confidence + 0.1)
+                notes.append("matching titles")
+
             if has_query and len(urls) < 3:
                 stats["ignored"] += 1
                 continue
 
-        bucket = "high" if confidence >= 0.8 else "medium" if confidence >= 0.5 else "low"
+        bucket = _confidence_bucket(confidence)
         stats[bucket] += 1
-
         groups.append(
             {
                 "key": key,
@@ -126,17 +134,20 @@ def detect_duplicate_pages(pages: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "page_ids": page_ids,
                 "method": method,
                 "confidence": round(confidence, 2),
+                "confidence_bucket": bucket,
                 "notes": notes,
+                "titles": titles[:5],
             }
         )
 
     groups.sort(key=lambda g: (-g["confidence"], -g["count"], g["key"]))
-
+    validation = _validation_for_groups(groups, stats.get("ignored", 0))
     return {
         "duplicate_groups": groups,
         "duplicate_group_count": len(groups),
         "duplicate_url_count": sum(group["count"] for group in groups),
         "confidence_buckets": stats,
+        "validation": validation,
     }
 
 
@@ -144,8 +155,8 @@ def render_duplicate_summary_md(dup: Dict[str, Any]) -> str:
     groups = dup.get("duplicate_groups") or []
     if not groups:
         return "## Duplicate candidates\n\nNo duplicate candidates detected.\n"
-
     buckets = dup.get("confidence_buckets") or {}
+    validation = dup.get("validation") or {}
     hi = int(buckets.get("high", 0) or 0)
     med = int(buckets.get("medium", 0) or 0)
     lo = int(buckets.get("low", 0) or 0)
@@ -157,17 +168,22 @@ def render_duplicate_summary_md(dup: Dict[str, Any]) -> str:
         f"- Duplicate groups: **{dup.get('duplicate_group_count', 0)}**",
         f"- URLs in duplicate groups: **{dup.get('duplicate_url_count', 0)}**",
         f"- Confidence buckets: **high {hi}**, **medium {med}**, **low {lo}**" + (f" (ignored {ign} noisy groups)" if ign else ""),
+        f"- Actionable groups: **{validation.get('actionable_groups', 0)}**",
+        f"- Manual review groups: **{validation.get('manual_review_groups', 0)}**",
         "",
     ]
 
     def render_group(group: Dict[str, Any]) -> List[str]:
         out: List[str] = []
         out.append(
-            f"- **{group['count']} pages** via `{group['method']}` — confidence **{group.get('confidence', 0)}** ({group['key']})"
+            f"- **{group['count']} pages** via `{group['method']}` — confidence **{group.get('confidence', 0)}** [{group.get('confidence_bucket', 'n/a')}] ({group['key']})"
         )
         notes = group.get("notes") or []
         if notes:
             out.append(f"  - _Notes:_ {'; '.join(notes)}")
+        titles = group.get("titles") or []
+        if titles:
+            out.append(f"  - _Titles:_ {'; '.join(titles[:3])}")
         for url in (group.get("urls") or [])[:5]:
             out.append(f"  - {url}")
         if len(group.get("urls") or []) > 5:
@@ -175,7 +191,6 @@ def render_duplicate_summary_md(dup: Dict[str, Any]) -> str:
         out.append("")
         return out
 
-    # Show high+medium first (most actionable)
     shown = 0
     for g in groups:
         if (g.get("confidence") or 0) < 0.5:
@@ -185,12 +200,18 @@ def render_duplicate_summary_md(dup: Dict[str, Any]) -> str:
         if shown >= 20:
             break
 
-    # Low confidence section (still useful, but don't overwhelm)
     low_groups = [g for g in groups if (g.get("confidence") or 0) < 0.5]
     if low_groups:
         lines.append("### Low confidence (review manually)")
         lines.append("")
         for g in low_groups[:10]:
             lines.extend(render_group(g))
+
+    lines.append("### Suggested validation flow")
+    lines.append("")
+    lines.append("- Prioritize high-confidence groups for canonical/redirect cleanup.")
+    lines.append("- Review medium-confidence path-only groups before merging content decisions.")
+    if low_groups:
+        lines.append("- Treat low-confidence groups as hints, not proof.")
 
     return "\n".join(lines).rstrip() + "\n"

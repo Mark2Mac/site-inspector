@@ -12,11 +12,21 @@ from .utils import now_iso
 # -----------------------------
 
 def load_run_dir(run_dir: Path) -> Dict[str, Any]:
-    run_path = run_dir / "run.json"
+    candidate = Path(run_dir)
+    run_path = candidate if candidate.is_file() else candidate / "run.json"
     if not run_path.exists():
-        raise FileNotFoundError(f"run.json not found in: {run_dir}")
+        nearby = []
+        if candidate.exists() and candidate.is_dir():
+            nearby = sorted(p.name for p in candidate.iterdir())[:8]
+        hint = ""
+        if nearby:
+            hint = f" Available entries: {', '.join(nearby)}"
+        raise FileNotFoundError(
+            f"run.json not found for: {candidate}. Pass a run directory that contains run.json, "
+            f"or the run.json file directly.{hint}"
+        )
     run = json.loads(run_path.read_text(encoding="utf-8"))
-    run["_run_dir"] = str(run_dir)
+    run["_run_dir"] = str(run_path.parent)
     return run
 
 
