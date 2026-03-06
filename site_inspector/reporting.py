@@ -182,8 +182,35 @@ def build_run_md(run: Dict[str, Any]) -> str:
                     lines.append(f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} page(s)")
             lines.append("")
 
+    ai = run.get("ai")
+    if ai:
+        lines.append("## AI Crawler Optimization\n")
+        lines.append(f"- Pages analyzed: **{ai.get('pages_analyzed')}**")
+
+        robots = ai.get("robots") or {}
+        sitemap = ai.get("sitemap") or {}
+        js = ai.get("js_accessibility") or {}
+        mr = ai.get("meta_robots") or {}
+        lines.append(f"- robots.txt present: **{robots.get('present')}**")
+        lines.append(f"- Sitemap present: **{sitemap.get('present')}**")
+        lines.append(f"- Sitemap URLs: **{sitemap.get('url_count', 0)}**")
+        lines.append(f"- JS-disabled readable pages: **{js.get('pages_js_disabled_readable', 0)} / {js.get('pages_checked', 0)}**")
+        lines.append(f"- Pages with noindex: **{((mr.get('noindex_pages') or {}).get('count', 0))}**\n")
+
+        issues = ai.get("issues") or []
+        if issues:
+            lines.append("### Top AI crawler issues\n")
+            for issue in issues[:8]:
+                examples = issue.get("examples") or []
+                ex_s = ", ".join(examples[:3])
+                if ex_s:
+                    lines.append(f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} page(s) e.g. {ex_s}")
+                else:
+                    lines.append(f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} item(s)")
+            lines.append("")
+
     lines.append("## Next steps\n")
-    lines.append("- v0.5: AI readiness checks (llms.txt, JSON-LD validation, citations friendliness).")
+    lines.append("- v0.7: reporting polish, CLI UX improvements, and packaging/versioning.")
     lines.append("- Optional gating: fail CI if too many pages are unreadable with JS disabled.\n")
 
     return "\n".join(lines)

@@ -12,5 +12,5 @@ def test_run_json_schema_has_expected_top_level_keys(tmp_path: Path, fixture_sit
     result = run_cli(["run", f"{fixture_site_url}/index.html", "--resume", "--skip-playwright", "--out", str(out_dir)])
     assert result.returncode == 0, result.stderr or result.stdout
     payload = json.loads((out_dir / "run.json").read_text(encoding="utf-8"))
-    for key in ["version", "generated_at", "target_url", "host", "crawl", "posture", "quality", "timings", "duplicates"]:
+    for key in ["version", "generated_at", "target_url", "host", "crawl", "posture", "quality", "timings", "duplicates", "seo", "ai"]:
         assert key in payload

@@ -50,9 +50,10 @@ Current focus now moves to Milestone 4.
 - initial SEO reporting layer ✅
 
 ### Milestone 4 -- AI Crawler Optimization
-- robots.txt analysis
-- sitemap health checks
-- JS accessibility signals
+- robots.txt analysis ✅
+- sitemap health checks ✅
+- JS accessibility signals ✅
+- initial AI readiness reporting layer ✅
 
 ### Milestone 5 -- Reporting & Developer Experience
 - report layout improvements

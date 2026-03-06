@@ -260,14 +260,17 @@ function Test-OutputChecks {
     $runJson = Get-Content -Raw -Path (Join-Root "runs\run_test\run.json") | ConvertFrom-Json
     $diffJson = Get-Content -Raw -Path (Join-Root "diffs\golden_vs_candidate\diff.json") | ConvertFrom-Json
 
-    foreach ($key in @("target_url", "crawl", "quality", "timings", "duplicates", "seo")) {
+    foreach ($key in @("target_url", "crawl", "quality", "timings", "duplicates", "seo", "ai")) {
         if (-not $runJson.PSObject.Properties.Name.Contains($key)) {
             throw ("run.json missing key: {0}" -f $key)
         }
     }
 
-    if (-not $diffJson.PSObject.Properties.Name.Contains("summary")) {
-        throw "diff.json missing key: summary"
+    if (-not $diffJson.PSObject.Properties.Name.Contains("quality")) {
+        throw "diff.json missing key: quality"
+    }
+    if (-not (($diffJson.quality).PSObject.Properties.Name.Contains("summary"))) {
+        throw "diff.json missing key: quality.summary"
     }
 
     Write-Host "run.json keys validated" -ForegroundColor Green
