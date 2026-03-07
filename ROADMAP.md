@@ -15,17 +15,15 @@
 
 ## Current Focus
 
-### Production Hardening
+### Milestone 3 -- SEO Auditing
 
-- Iteration 1 -- Packaging cleanup ✅
-- Iteration 2 -- Output contracts (current)
-- Iteration 3 -- Reliability & diagnostics
-- Iteration 4 -- Validation corpus
+Integrated initial SEO auditing layer:
+- metadata checks (titles, descriptions, H1s)
+- canonical checks
+- status code and redirect analysis
+- internal linking signals (zero inlinks/outlinks)
 
-Current focus now moves to freezing machine-readable output contracts for:
-- `run.json`
-- `diff.json`
-- `quality_summary.json`
+Current focus now moves to release prep and optional packaging hardening.
 
 ## Milestones
 
@@ -72,16 +70,10 @@ A Windows-first CLI tool capable of:
 - evaluating AI crawler accessibility
 - generating structured audit reports
 
+## Production hardening
 
-### Milestone 6 -- Packaging & Release Prep
-- pyproject.toml packaging metadata ✅
-- module entrypoint (`python -m site_inspector`) ✅
-- console script metadata (`site-inspector`) ✅
-- install documentation ✅
+- P1 Packaging cleanup: done
+- P2 Output contracts: done
+- P3 Reliability & diagnostics: done
+- P4 Validation corpus: next
 
-
-### Production Hardening
-- P1: packaging cleanup ✅
-- P2: output contracts and golden contract tests ✅ (this patch)
-- P3: reliability & diagnostics
-- P4: validation corpus

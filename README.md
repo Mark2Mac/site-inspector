@@ -10,28 +10,6 @@ The project focuses on:
 -   SEO signal auditing
 -   AI crawler accessibility evaluation
 
-
-## Installation
-
-Editable install for local development:
-
-```powershell
-py -m pip install -e .
-```
-
-Package entrypoint:
-
-```powershell
-py -m site_inspector --version
-py -m site_inspector run https://example.com --max-pages 5 --skip-playwright
-```
-
-Legacy script entrypoint remains supported:
-
-```powershell
-py site_audit.py --version
-```
-
 ## Example Usage
 
 Run a crawl:
@@ -76,17 +54,6 @@ See:
 `AI_INSTRUCTIONS.md` for AI collaboration rules
 
 
-
-## Stable Output Contracts
-
-The project now freezes minimal machine-readable contracts for:
-
-- `run.json`
-- `diff.json`
-- `quality_summary.json`
-
-These are validated in pytest using golden contract files so refactors do not silently break downstream tooling.
-
 ## Testing
 
 Use deterministic CLI regression tests on Windows:
@@ -105,3 +72,10 @@ py site_audit.py diff runs\golden runs\candidate --out diffs\golden_vs_candidate
 ```
 
 `diff` now accepts either a run directory containing `run.json` or the `run.json` file directly, and returns a clearer error when the path is wrong.
+
+## Diagnostics
+
+By default, common CLI failures are rendered as short human-readable errors instead of Python tracebacks.
+
+Set `SITE_INSPECTOR_DEBUG=1` to keep full tracebacks during local debugging.
+

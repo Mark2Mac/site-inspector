@@ -1,17 +1,11 @@
 # Changelog
 
 ## Unreleased
-- Packaging metadata via `pyproject.toml`
-- `python -m site_inspector` module entrypoint
-- Console script metadata for `site-inspector`
 - Separate worker pools (net vs heavy)
 - Host throttling + retries
 - Resumeable runs via per-page caching
 - URL normalization guardrails
 - Smarter Lighthouse sampling
-- Output contracts added for `run.json`, `diff.json`, and `quality_summary.json`
-- Runner output checks now validate `quality_summary.json` keys
-- Test fixtures aligned to current `quality_summary.json` shape
 
 ## 0.5 (current)
 - Modular architecture stabilized on Windows
@@ -20,3 +14,5 @@
 - Lighthouse concurrency control (`--lighthouse-workers`)
 - Windows subprocess handling hardened (npx.cmd) + UTF-8 output capture
 - API hardening for CLI/module compatibility (arg aliases + safe defaults)
+
+- production hardening p3: human-readable CLI errors by default, optional debug tracebacks via `SITE_INSPECTOR_DEBUG=1`, and tighter diagnostics tests.

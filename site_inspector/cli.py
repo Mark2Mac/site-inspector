@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,23 +30,32 @@ from .utils import (
 )
 
 
-def _safe_console_print(message: str) -> None:
+def _safe_console_print(message: str, *, stream=None) -> None:
+    stream = stream or sys.stdout
     try:
-        print(message)
+        print(message, file=stream)
         return
     except UnicodeEncodeError:
         pass
 
-    stream = getattr(sys, "stdout", None)
     encoding = getattr(stream, "encoding", None) or "utf-8"
     fallback = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
-    print(fallback)
+    print(fallback, file=stream)
 
 
 def _print_generated_block(label: str, paths: list[Path]) -> None:
     _safe_console_print(f"✅ {label}:")
     for path in paths:
         _safe_console_print(f"- {path}")
+
+
+def _debug_enabled() -> bool:
+    value = (os.environ.get("SITE_INSPECTOR_DEBUG") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _print_error(message: str) -> None:
+    _safe_console_print(f"ERROR: {message}", stream=sys.stderr)
 
 
 # -----------------------------
@@ -512,9 +523,31 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None):
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    return args.fn(args)
+    try:
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        return args.fn(args)
+    except KeyboardInterrupt:
+        _print_error("Interrupted by user.")
+        return 130
+    except FileNotFoundError as exc:
+        if _debug_enabled():
+            traceback.print_exc()
+        else:
+            _print_error(str(exc))
+        return 2
+    except (ValueError, RuntimeError) as exc:
+        if _debug_enabled():
+            traceback.print_exc()
+        else:
+            _print_error(str(exc))
+        return 2
+    except Exception as exc:
+        if _debug_enabled():
+            traceback.print_exc()
+        else:
+            _print_error(f"Unexpected failure: {exc}")
+        return 1
 
 
 if __name__ == "__main__":
