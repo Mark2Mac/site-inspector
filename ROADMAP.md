@@ -23,7 +23,7 @@ Integrated initial SEO auditing layer:
 - status code and redirect analysis
 - internal linking signals (zero inlinks/outlinks)
 
-Current focus now moves to Milestone 4.
+Current focus now moves to release prep and optional packaging hardening.
 
 ## Milestones
 
@@ -56,9 +56,10 @@ Current focus now moves to Milestone 4.
 - initial AI readiness reporting layer ✅
 
 ### Milestone 5 -- Reporting & Developer Experience
-- report layout improvements
-- CLI usability improvements
-- packaging and versioning
+- report layout improvements ✅
+- CLI usability improvements ✅
+- packaging/version metadata alignment ✅
+- initial reporting polish layer integrated ✅
 
 ## Target Outcome
 

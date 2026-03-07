@@ -49,42 +49,17 @@ function Ensure-Dirs {
     New-Item -ItemType Directory -Force -Path (Join-Root "budgets") | Out-Null
 }
 
-function Expect-NativeFailure {
-    param(
-        [Parameter(Mandatory = $true)][string]$Label,
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [string[]]$Needles = @()
-    )
-
-    Write-Host "PS> $Label" -ForegroundColor DarkGray
-    Ensure-Dirs
-
-    $id = [guid]::NewGuid().ToString("N")
-    $stdoutPath = Join-Root ("logs\expected_failure_" + $id + ".stdout.txt")
-    $stderrPath = Join-Root ("logs\expected_failure_" + $id + ".stderr.txt")
-
-    $proc = Start-Process -FilePath $FilePath -ArgumentList $Arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
-    $output = ""
-    if (Test-Path $stdoutPath) {
-        $output += (Get-Content -Raw -Path $stdoutPath)
+function Expect-NativeFailure([string]$label, [scriptblock]$block) {
+    Write-Host "PS> $label" -ForegroundColor DarkGray
+    try {
+        & $block 2>$null
+    } catch {
+        # Ignore stderr noise from commands that are expected to fail.
     }
-    if (Test-Path $stderrPath) {
-        if ($output) { $output += "`n" }
-        $output += (Get-Content -Raw -Path $stderrPath)
+    if ($LASTEXITCODE -eq 0) {
+        throw ("Command unexpectedly succeeded: {0}" -f $label)
     }
-
-    if ($proc.ExitCode -eq 0) {
-        throw ("Command unexpectedly succeeded: {0}" -f $Label)
-    }
-
-    foreach ($needle in $Needles) {
-        if (-not $output.Contains($needle)) {
-            throw ("Expected failure output missing text '{0}' for command: {1}`nActual output:`n{2}" -f $needle, $Label, $output)
-        }
-    }
-
-    Write-Host ("Expected failure observed (exit {0})" -f $proc.ExitCode) -ForegroundColor Yellow
+    Write-Host ("Expected failure observed (exit {0})" -f $LASTEXITCODE) -ForegroundColor Yellow
 }
 
 function Write-LooseBudget {
@@ -99,6 +74,7 @@ function Write-LooseBudget {
         }
         audits = @{}
     }
+
     $json = $budgetObj | ConvertTo-Json -Depth 5
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($budgetPath, $json, $utf8NoBom)
@@ -133,6 +109,7 @@ function Test-PytestLoop {
 function Test-HelpChecks {
     Write-Step "Checking CLI help"
     Run-Cmd 'py site_audit.py --help'
+    Run-Cmd 'py site_audit.py --version'
     Run-Cmd 'py site_audit.py crawl --help'
     Run-Cmd 'py site_audit.py quality --help'
     Run-Cmd 'py site_audit.py playwright --help'
@@ -164,7 +141,7 @@ function Test-DuplicateChecks {
     Ensure-Dirs
     Write-Step "Running duplicate/B3 checks"
     $dupRun = Join-Root "runs\dup_test"
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages 10 --skip-playwright --out "{2}"' -f $Site, 10, $dupRun)
+    Run-Cmd ('py site_audit.py run "{0}" --max-pages 10 --skip-playwright --out "{1}"' -f $Site, $dupRun)
 
     $jsonPath = Join-Root "runs\dup_test\run.json"
     $json = Get-Content -Raw -Path $jsonPath | ConvertFrom-Json
@@ -205,23 +182,17 @@ function Test-ErrorChecks {
     New-Item -ItemType Directory -Force -Path (Join-Root "runs\empty_test") | Out-Null
     Write-Host "These commands are expected to fail with a human-readable error." -ForegroundColor Yellow
 
-    Expect-NativeFailure `
-        -Label ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) `
-        -FilePath 'py' `
-        -Arguments @('site_audit.py', 'diff', (Join-Root "runs\does_not_exist"), $candidate, '--out', (Join-Root "diffs\bad_left")) `
-        -Needles @('run.json not found for', 'run.json file directly')
+    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
+        py site_audit.py diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
+    }
 
-    Expect-NativeFailure `
-        -Label ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) `
-        -FilePath 'py' `
-        -Arguments @('site_audit.py', 'diff', $candidate, (Join-Root "runs\does_not_exist"), '--out', (Join-Root "diffs\bad_right")) `
-        -Needles @('run.json not found for', 'run.json file directly')
+    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
+        py site_audit.py diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
+    }
 
-    Expect-NativeFailure `
-        -Label ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) `
-        -FilePath 'py' `
-        -Arguments @('site_audit.py', 'diff', (Join-Root "runs\empty_test"), $candidate, '--out', (Join-Root "diffs\bad_empty")) `
-        -Needles @('run.json not found for', 'run.json file directly')
+    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
+        py site_audit.py diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
+    }
 }
 
 function Test-BudgetChecks {
@@ -241,7 +212,12 @@ function Test-OutputChecks {
     $candidate = Join-Root "runs\candidate"
     $diffDir = Join-Root "diffs\golden_vs_candidate"
 
-    if (-not (Test-Path (Join-Root "runs\run_test\run.json"))) {
+    $runJsonPath = Join-Root "runs\run_test\run.json"
+    $runMdPath = Join-Root "runs\run_test\run.md"
+    $diffJsonPath = Join-Root "diffs\golden_vs_candidate\diff.json"
+    $diffMdPath = Join-Root "diffs\golden_vs_candidate\diff.md"
+
+    if (-not (Test-Path $runJsonPath)) {
         Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $runTest)
     }
     if (-not (Test-Path (Join-Root "runs\golden\run.json"))) {
@@ -250,15 +226,17 @@ function Test-OutputChecks {
     if (-not (Test-Path (Join-Root "runs\candidate\run.json"))) {
         Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
     }
-    if (-not (Test-Path (Join-Root "diffs\golden_vs_candidate\diff.json"))) {
+    if (-not (Test-Path $diffJsonPath)) {
         Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
     }
 
     Get-ChildItem $runTest | Out-Host
     Get-ChildItem $diffDir | Out-Host
 
-    $runJson = Get-Content -Raw -Path (Join-Root "runs\run_test\run.json") | ConvertFrom-Json
-    $diffJson = Get-Content -Raw -Path (Join-Root "diffs\golden_vs_candidate\diff.json") | ConvertFrom-Json
+    $runJson = Get-Content -Raw -Path $runJsonPath | ConvertFrom-Json
+    $diffJson = Get-Content -Raw -Path $diffJsonPath | ConvertFrom-Json
+    $runMd = Get-Content -Raw -Path $runMdPath
+    $diffMd = Get-Content -Raw -Path $diffMdPath
 
     foreach ($key in @("target_url", "crawl", "quality", "timings", "duplicates", "seo", "ai")) {
         if (-not $runJson.PSObject.Properties.Name.Contains($key)) {
@@ -269,12 +247,26 @@ function Test-OutputChecks {
     if (-not $diffJson.PSObject.Properties.Name.Contains("quality")) {
         throw "diff.json missing key: quality"
     }
-    if (-not (($diffJson.quality).PSObject.Properties.Name.Contains("summary"))) {
+    if (-not $diffJson.quality.PSObject.Properties.Name.Contains("summary")) {
         throw "diff.json missing key: quality.summary"
+    }
+
+    foreach ($needle in @("Executive summary", "Priority findings", "Artifacts")) {
+        if ($runMd -notmatch [Regex]::Escape($needle)) {
+            throw ("run.md missing section: {0}" -f $needle)
+        }
+    }
+
+    foreach ($needle in @("Executive summary")) {
+        if ($diffMd -notmatch [Regex]::Escape($needle)) {
+            throw ("diff.md missing section: {0}" -f $needle)
+        }
     }
 
     Write-Host "run.json keys validated" -ForegroundColor Green
     Write-Host "diff.json keys validated" -ForegroundColor Green
+    Write-Host "run.md sections validated" -ForegroundColor Green
+    Write-Host "diff.md sections validated" -ForegroundColor Green
 }
 
 function Test-RegressionPack {

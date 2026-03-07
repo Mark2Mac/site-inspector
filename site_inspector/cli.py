@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import __version__
 from .crawl import discover_pages
 from .posture import collect_posture
 from .lighthouse import quality_for_urls, DEFAULT_BUDGET, select_lighthouse_targets
@@ -213,9 +214,7 @@ def cmd_quality(args: argparse.Namespace) -> int:
 
         safe_write_json(out_dir / "quality_summary.json", quality)
 
-    print("✅ Quality audit complete")
-    print(f"- summary: {out_dir / 'quality_summary.json'}")
-    print(f"- lighthouse: {out_dir / 'lighthouse'}")
+    _print_generated_block("Quality audit complete", [out_dir / "quality_summary.json", out_dir / "lighthouse"])
     return 0
 
 
@@ -243,8 +242,7 @@ def cmd_playwright(args: argparse.Namespace) -> int:
 
     safe_write_json(out_dir / "playwright_summary.json", summary)
 
-    print("✅ Playwright saved:")
-    print(f"- {out_dir / 'playwright_summary.json'}")
+    _print_generated_block("Playwright saved", [out_dir / "playwright_summary.json"])
     return 0
 
 
@@ -363,7 +361,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             timings["playwright_s"] = round(time.perf_counter() - t0, 3)
 
     run_obj = {
-        "version": "0.6",
+        "version": __version__,
         "generated_at": now_iso(),
         "target_url": target,
         "host": host,
@@ -441,6 +439,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="site_audit.py")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     sub = p.add_subparsers(dest="cmd", required=True)
 

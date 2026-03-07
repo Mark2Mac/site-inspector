@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from . import __version__
 from .utils import now_iso
 
 
@@ -206,7 +207,7 @@ def diff_runs(run_a: Dict[str, Any], run_b: Dict[str, Any], *, allow_new_third_p
         }
 
     out = {
-        "version": "0.4",
+        "version": __version__,
         "generated_at": now_iso(),
         "runA": {"dir": run_a.get("_run_dir"), "generated_at": run_a.get("generated_at"), "target_url": run_a.get("target_url")},
         "runB": {"dir": run_b.get("_run_dir"), "generated_at": run_b.get("generated_at"), "target_url": run_b.get("target_url")},
@@ -231,11 +232,23 @@ def diff_runs(run_a: Dict[str, Any], run_b: Dict[str, Any], *, allow_new_third_p
 
 def render_diff_md(diff: Dict[str, Any]) -> str:
     lines: List[str] = []
-    lines.append("# Inspector Diff (v0.4)\n")
+    lines.append(f"# Inspector Diff ({diff.get('version') or __version__})\n")
     lines.append(f"- Generated: **{diff.get('generated_at')}**")
     lines.append(f"- Passed: **{diff.get('passed')}**")
     if not diff.get("passed"):
         lines.append(f"- Fail reasons: `{', '.join(diff.get('fail_reasons') or [])}`")
+    lines.append("")
+    lines.append("## Executive summary\n")
+    pages = diff.get("pages") or {}
+    tp = diff.get("third_parties") or {}
+    q = diff.get("quality") or {}
+    lines.append(f"- Page additions: **{len(pages.get('added') or [])}**")
+    lines.append(f"- Page removals: **{len(pages.get('removed') or [])}**")
+    lines.append(f"- New third-party domains: **{len(tp.get('added') or [])}**")
+    if q.get("available"):
+        lines.append(f"- Quality regressions: **{len(q.get('regressions') or [])}**")
+    else:
+        lines.append("- Quality regressions: **n/a**")
     lines.append("")
 
     a = diff.get("runA") or {}
