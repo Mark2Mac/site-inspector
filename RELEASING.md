@@ -1,24 +1,37 @@
 # Releasing Site Inspector
 
-This project is Windows-first and should only be released after the full local regression suite is green.
+## Local release checklist
 
-## Release checklist
+1. Run the full local suite:
 
-1. Update version in `site_inspector/__init__.py` and `pyproject.toml`.
-2. Update `CHANGELOG.md`.
-3. Run:
-   - `py -m pytest -q`
-   - `.\run_tests.ps1 -All`
-4. Build release artifacts:
-   - `py -m build --sdist --wheel --outdir .site_inspector_local\dist`
-5. Validate package metadata:
-   - `py -m twine check .site_inspector_local\dist\*`
-6. Smoke-check the module entrypoint:
-   - `py -m site_inspector --version`
-7. Tag the release and publish through your chosen channel.
+```powershell
+.\run_tests.ps1 -All
+```
+
+2. Build the package:
+
+```powershell
+py -m build --sdist --wheel --outdir .site_inspector_local\dist
+```
+
+3. Validate artifacts:
+
+```powershell
+py -m twine check .site_inspector_local\dist\*
+```
+
+4. Confirm that no local artifacts leaked into the build:
+- `.site_inspector_local/`
+- `runs/`
+- `diffs/`
+- temporary caches
+
+5. Confirm versioning and docs are aligned:
+- `pyproject.toml`
+- `site_inspector/__init__.py`
+- `CHANGELOG.md`
+- `README.md`
 
 ## Notes
 
-- Local artifacts are intentionally kept under `.site_inspector_local/`.
-- The legacy `site_audit.py` script remains supported for local development.
-- Public release should prefer the package entrypoint (`site-inspector` / `python -m site_inspector`).
+This checklist is intentionally local-first. Publishing should only happen after the production hardening iterations are complete.

@@ -3,18 +3,22 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.egg-info/
+
+# Virtual environments
 .venv/
 venv/
+
+# Packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
 
 # Node artifacts
 node_modules/
 
-# OS junk
-.DS_Store
-Thumbs.db
-
-# Tool outputs (can be huge)
+# Test / local artifacts
+.site_inspector_local/
 runs/
 diffs/
 inspect_*/
@@ -22,5 +26,6 @@ inspect_*/
 # Logs
 *.log
 
-# Local Site Inspector artifacts
-.site_inspector_local/
+# OS junk
+.DS_Store
+Thumbs.db

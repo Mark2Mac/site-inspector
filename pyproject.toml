@@ -5,27 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "site-inspector"
 version = "0.7.0"
-description = "Windows-first CLI for technical website auditing"
+description = "Windows-first CLI for technical website auditing, structural analysis, SEO, AI crawler readiness, and diff-based site intelligence"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{name = "OpenAI / User project"}]
-license = {text = "Proprietary"}
-dependencies = [
-  "requests>=2.31.0",
-  "beautifulsoup4>=4.12.0",
-]
-keywords = ["seo", "crawler", "audit", "lighthouse", "playwright", "site-inspector", "technical-seo", "ai-crawler"]
+authors = [{ name = "OpenAI / User project" }]
+license = "LicenseRef-Proprietary"
+keywords = ["seo", "crawler", "audit", "lighthouse", "playwright", "site-intelligence"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Operating System :: Microsoft :: Windows",
   "Environment :: Console",
 ]
+dependencies = [
+  "requests>=2.31.0",
+  "beautifulsoup4>=4.12.0",
+]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=9.0",
+  "build>=1.2",
+  "twine>=5.0",
 ]
+
+[project.urls]
+Homepage = "https://example.invalid/site-inspector"
+Changelog = "https://example.invalid/site-inspector/changelog"
+Documentation = "https://example.invalid/site-inspector/readme"
 
 [project.scripts]
 site-inspector = "site_inspector.cli:main"
@@ -33,9 +40,3 @@ site-inspector = "site_inspector.cli:main"
 [tool.setuptools.packages.find]
 include = ["site_inspector*"]
 exclude = ["tests*"]
-
-[project.urls]
-Homepage = "https://example.com/site-inspector"
-Documentation = "https://example.com/site-inspector/docs"
-Repository = "https://example.com/site-inspector/repo"
-Issues = "https://example.com/site-inspector/issues"
