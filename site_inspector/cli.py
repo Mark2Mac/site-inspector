@@ -30,17 +30,17 @@ from .utils import (
 )
 
 
-def _safe_console_print(message: str, *, stream=None) -> None:
-    stream = stream or sys.stdout
+def _safe_console_print(message: str) -> None:
     try:
-        print(message, file=stream)
+        print(message)
         return
     except UnicodeEncodeError:
         pass
 
+    stream = getattr(sys, "stdout", None)
     encoding = getattr(stream, "encoding", None) or "utf-8"
     fallback = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
-    print(fallback, file=stream)
+    print(fallback)
 
 
 def _print_generated_block(label: str, paths: list[Path]) -> None:
@@ -49,13 +49,55 @@ def _print_generated_block(label: str, paths: list[Path]) -> None:
         _safe_console_print(f"- {path}")
 
 
-def _debug_enabled() -> bool:
-    value = (os.environ.get("SITE_INSPECTOR_DEBUG") or "").strip().lower()
-    return value in {"1", "true", "yes", "on"}
+def _safe_console_error_print(message: str) -> None:
+    try:
+        print(message, file=sys.stderr)
+        return
+    except UnicodeEncodeError:
+        pass
+
+    stream = getattr(sys, "stderr", None)
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    fallback = message.encode(encoding, errors="replace").decode(encoding, errors="replace")
+    print(fallback, file=sys.stderr)
 
 
-def _print_error(message: str) -> None:
-    _safe_console_print(f"ERROR: {message}", stream=sys.stderr)
+def _load_lighthouse_include_urls(path: str | None) -> list[str] | None:
+    if not path:
+        return None
+    try:
+        return [
+            ln.strip()
+            for ln in Path(path).read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+    except Exception:
+        return None
+
+
+def _build_lighthouse_group_map(crawl: dict | None) -> dict[str, str] | None:
+    try:
+        pages_list = (crawl or {}).get("pages") or []
+        gm: dict[str, str] = {}
+        has_fp = False
+        for p in pages_list:
+            u = p.get("url")
+            if not u:
+                continue
+            fp = p.get("dom_fingerprint")
+            if fp:
+                gm[u] = f"dom:{fp}"
+                has_fp = True
+        if not has_fp:
+            from .template_clustering import url_to_template
+            for p in pages_list:
+                u = p.get("url")
+                if not u:
+                    continue
+                gm[u] = f"url:{url_to_template(u)}"
+        return gm or None
+    except Exception:
+        return None
 
 
 # -----------------------------
@@ -153,45 +195,10 @@ def cmd_quality(args: argparse.Namespace) -> int:
         budget = load_json_if_exists(args.budget) or DEFAULT_BUDGET
 
         # A6: smarter Lighthouse targeting (sampling)
-        always_include = None
-        if args.lighthouse_include:
-            try:
-                always_include = [
-                    ln.strip()
-                    for ln in Path(args.lighthouse_include).read_text(encoding="utf-8").splitlines()
-                    if ln.strip() and not ln.strip().startswith("#")
-                ]
-            except Exception:
-                always_include = None
+        always_include = _load_lighthouse_include_urls(args.lighthouse_include)
 
         if args.lighthouse_sample is not None:
-
-            # B2: template-aware grouping for sampling (DOM fingerprint if available, else URL template)
-            group_map = None
-            try:
-                pages_list = crawl.get("pages") or []
-                gm = {}
-                has_fp = False
-                for p in pages_list:
-                    u = p.get("url")
-                    if not u:
-                        continue
-                    fp = p.get("dom_fingerprint")
-                    if fp:
-                        gm[u] = f"dom:{fp}"
-                        has_fp = True
-                if not has_fp:
-                    from .template_clustering import url_to_template
-                    for p in pages_list:
-                        u = p.get("url")
-                        if not u:
-                            continue
-                        gm[u] = f"url:{url_to_template(u)}"
-                if gm:
-                    group_map = gm
-            except Exception:
-                group_map = None
-
+            group_map = _build_lighthouse_group_map(crawl)
             sel = select_lighthouse_targets(
                 urls,
                 target_url=target,
@@ -309,18 +316,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         timings["lighthouse_s"] = 0.0
     else:
         # A6: smarter Lighthouse targeting (sampling)
-        always_include = None
-        if args.lighthouse_include:
-            try:
-                always_include = [
-                    ln.strip()
-                    for ln in Path(args.lighthouse_include).read_text(encoding="utf-8").splitlines()
-                    if ln.strip() and not ln.strip().startswith("#")
-                ]
-            except Exception:
-                always_include = None
+        always_include = _load_lighthouse_include_urls(args.lighthouse_include)
 
         if args.lighthouse_sample is not None:
+            group_map = _build_lighthouse_group_map(crawl)
             sel = select_lighthouse_targets(
                 urls,
                 target_url=target,
@@ -523,31 +522,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
     try:
-        parser = build_parser()
-        args = parser.parse_args(argv)
         return args.fn(args)
+    except (FileNotFoundError, ValueError) as exc:
+        if os.environ.get("SITE_INSPECTOR_DEBUG"):
+            traceback.print_exc()
+        else:
+            _safe_console_error_print(str(exc))
+        return 2
     except KeyboardInterrupt:
-        _print_error("Interrupted by user.")
+        _safe_console_error_print("Interrupted.")
         return 130
-    except FileNotFoundError as exc:
-        if _debug_enabled():
-            traceback.print_exc()
-        else:
-            _print_error(str(exc))
-        return 2
-    except (ValueError, RuntimeError) as exc:
-        if _debug_enabled():
-            traceback.print_exc()
-        else:
-            _print_error(str(exc))
-        return 2
-    except Exception as exc:
-        if _debug_enabled():
-            traceback.print_exc()
-        else:
-            _print_error(f"Unexpected failure: {exc}")
-        return 1
 
 
 if __name__ == "__main__":
