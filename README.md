@@ -316,6 +316,16 @@ See `ROADMAP.md` for planning details.
 
 ---
 
+## Built with
+
+- Requests — HTTP client
+- Beautiful Soup — HTML parsing
+- Lighthouse — web quality auditing
+- Playwright — browser automation and rendered-page checks
+- pytest — test framework
+
+---
+
 ## License
 
 MIT — see `LICENSE`.
