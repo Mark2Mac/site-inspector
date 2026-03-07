@@ -8,13 +8,13 @@ version = "0.7.0"
 description = "Windows-first CLI for technical website auditing, structural analysis, SEO, AI crawler readiness, and diff-based site intelligence"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "OpenAI / User project" }]
-license = "LicenseRef-Proprietary"
+authors = [{ name = "Site Inspector maintainers" }]
+license = "MIT"
 keywords = ["seo", "crawler", "audit", "lighthouse", "playwright", "site-intelligence"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Operating System :: Microsoft :: Windows",
+  "Operating System :: OS Independent",
   "Environment :: Console",
 ]
 dependencies = [
@@ -30,9 +30,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://example.invalid/site-inspector"
-Changelog = "https://example.invalid/site-inspector/changelog"
-Documentation = "https://example.invalid/site-inspector/readme"
+Repository = "https://github.com/YOUR_USERNAME/site-inspector"
+Issues = "https://github.com/YOUR_USERNAME/site-inspector/issues"
+Homepage = "https://github.com/YOUR_USERNAME/site-inspector"
+Changelog = "https://github.com/YOUR_USERNAME/site-inspector/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/YOUR_USERNAME/site-inspector#readme"
 
 [project.scripts]
 site-inspector = "site_inspector.cli:main"

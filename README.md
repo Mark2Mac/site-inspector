@@ -58,6 +58,13 @@ See:
 
 Use deterministic CLI regression tests on Windows:
 
+If PowerShell blocks local scripts on first run, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_tests.ps1 -All
+```
+
+
 ```powershell
 py -m pytest -q
 py -m pytest -vv
@@ -66,8 +73,8 @@ py -m pytest -vv
 For manual smoke checks:
 
 ```powershell
-py site_audit.py run https://www.dedicatodesign.com --max-pages 5 --skip-playwright --out runs\golden
-py site_audit.py run https://www.dedicatodesign.com --max-pages 5 --skip-playwright --out runs\candidate
+py site_audit.py run https://example.com --max-pages 5 --skip-playwright --out runs\golden
+py site_audit.py run https://example.com --max-pages 5 --skip-playwright --out runs\candidate
 py site_audit.py diff runs\golden runs\candidate --out diffs\golden_vs_candidate
 ```
 

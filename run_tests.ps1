@@ -1,3 +1,7 @@
+# Windows note: if PowerShell blocks this script, run with:
+#   powershell -ExecutionPolicy Bypass -File .\run_tests.ps1 -All
+# Or unlock once with: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
 param(
     [switch]$Setup,
     [switch]$PytestQuick,
@@ -16,7 +20,7 @@ param(
     [switch]$RegressionPack,
     [switch]$All,
 
-    [string]$Site = "https://www.dedicatodesign.com",
+    [string]$Site = "https://example.com",
     [int]$MaxPages = 5,
     [int]$PlaywrightPages = 3,
     [int]$PytestLoops = 5,
