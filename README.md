@@ -1,46 +1,25 @@
 # Site Inspector
 
-Site Inspector is a **Windows-first CLI for technical website auditing**.
+Site Inspector is a **Windows‑first CLI tool for technical website
+auditing**.
 
-It has grown from a crawler prototype into a **site intelligence tool** that combines:
-- crawl and resumeable site discovery
-- Lighthouse quality analysis
-- Playwright rendering checks
-- duplicate-content and structure clustering
-- SEO auditing
-- AI crawler readiness auditing
-- run-to-run diffing
-- Windows-friendly packaging and release flows
+The project focuses on:
 
-## Current status
+-   structural website analysis
+-   duplicate content detection
+-   SEO signal auditing
+-   AI crawler accessibility evaluation
 
-Current baseline is stable:
-- regression suite is green
-- packaging builds (`sdist` and `wheel`) pass
-- release checks pass via `twine check`
-- local artifacts are isolated under `.site_inspector_local/`
-
-The next workstream is **production hardening**, done in a few controlled iterations:
-1. packaging cleanup
-2. output contracts
-3. reliability and diagnostics
-4. validation corpus
 
 ## Installation
 
-Editable install for development:
+Editable install for local development:
 
 ```powershell
 py -m pip install -e .
 ```
 
-Install dev tooling:
-
-```powershell
-py -m pip install -r requirements-dev.txt
-```
-
-Module entrypoint:
+Package entrypoint:
 
 ```powershell
 py -m site_inspector --version
@@ -53,74 +32,76 @@ Legacy script entrypoint remains supported:
 py site_audit.py --version
 ```
 
-## Example usage
+## Example Usage
 
 Run a crawl:
 
-```powershell
-py site_audit.py crawl https://example.com --max-pages 5 --out .site_inspector_local\runs\crawl_demo
-```
+    python site_audit.py run https://example.com --max-pages 5
 
-Run a full audit:
+Run Playwright analysis:
 
-```powershell
-py site_audit.py run https://example.com --max-pages 5 --out .site_inspector_local\runs\run_demo
-```
+    python site_audit.py playwright https://example.com
 
-Compare two runs:
+Compare two crawls:
 
-```powershell
-py site_audit.py diff .site_inspector_local\runs\golden .site_inspector_local\runs\candidate --out .site_inspector_local\diffs\golden_vs_candidate
-```
+    python site_audit.py diff runs/runA runs/runB
 
-## Output model
+## Output
 
-Each run can produce:
-- `pages.json`
-- `posture.json`
-- `quality_summary.json`
-- `playwright_summary.json`
-- `run.json`
-- `run.md`
+Each run generates:
+
+-   `run.json` -- machine‑readable report
+-   `run.md` -- human‑readable audit
 
 Diff runs generate:
+
+-   `diff.json`
+-   `diff.md`
+
+## Development Model
+
+The project follows a **milestone‑based roadmap** to avoid fragmented
+development.
+
+Key priorities:
+
+1.  reliability of crawling
+2.  duplicate detection accuracy
+3.  SEO signal analysis
+4.  AI crawler optimization
+
+See:
+
+`ROADMAP.md` for development plan\
+`AI_INSTRUCTIONS.md` for AI collaboration rules
+
+
+
+## Stable Output Contracts
+
+The project now freezes minimal machine-readable contracts for:
+
+- `run.json`
 - `diff.json`
-- `diff.md`
+- `quality_summary.json`
 
-All local test and packaging artifacts should stay under:
-
-```text
-.site_inspector_local/
-```
+These are validated in pytest using golden contract files so refactors do not silently break downstream tooling.
 
 ## Testing
 
-Fast regression checks:
+Use deterministic CLI regression tests on Windows:
 
 ```powershell
 py -m pytest -q
+py -m pytest -vv
 ```
 
-Full local validation:
+For manual smoke checks:
 
 ```powershell
-.\run_tests.ps1 -All
+py site_audit.py run https://www.dedicatodesign.com --max-pages 5 --skip-playwright --out runs\golden
+py site_audit.py run https://www.dedicatodesign.com --max-pages 5 --skip-playwright --out runs\candidate
+py site_audit.py diff runs\golden runs\candidate --out diffs\golden_vs_candidate
 ```
 
-## Packaging and release
-
-Local package build:
-
-```powershell
-py -m build --sdist --wheel --outdir .site_inspector_local\dist
-py -m twine check .site_inspector_local\dist\*
-```
-
-See `RELEASING.md` for the release checklist.
-
-## Docs to keep aligned
-
-- `ROADMAP.md` — current delivery plan
-- `CHANGELOG.md` — shipped changes and unreleased work
-- `RELEASING.md` — public package / release steps
-- `AI_INSTRUCTIONS.md` — AI collaboration protocol
+`diff` now accepts either a run directory containing `run.json` or the `run.json` file directly, and returns a clearer error when the path is wrong.

@@ -1,108 +1,87 @@
-# Site Inspector — Development Roadmap
+# Site Inspector -- Development Roadmap
 
-## Baseline complete
+## Completed
 
-These workstreams are considered integrated and green in the current baseline:
+- A1--A6: Core crawler foundation
+- B0--B2: Analysis pipeline
+- B3: Duplicate detection hardening + validation
+- Milestone 0: Stability layer (CLI regression tests + golden schema checks)
+- Milestone 1: Duplicate detection reliability
+- Milestone 2: Crawl quality guardrails
+  - stronger URL normalization
+  - query-shape caps per path
+  - path-depth caps
+  - crawl metadata for guardrail hits
 
-- Core crawler foundation
-- Analysis pipeline
-- Duplicate detection hardening + validation layer
-- Stability layer (CLI regression tests + golden schema checks)
-- Crawl quality guardrails
-- SEO auditing
-- AI crawler optimization
-- Reporting and developer experience
-- Packaging and public release prep
+## Current Focus
 
-## Current focus
+### Production Hardening
 
-### Production Hardening Program
+- Iteration 1 -- Packaging cleanup ✅
+- Iteration 2 -- Output contracts (current)
+- Iteration 3 -- Reliability & diagnostics
+- Iteration 4 -- Validation corpus
 
-The next phase is not about adding broad new capabilities. It is about making the current tool safer to publish and easier to maintain.
+Current focus now moves to freezing machine-readable output contracts for:
+- `run.json`
+- `diff.json`
+- `quality_summary.json`
 
-This phase is intentionally split into **4 controlled iterations** so changes stay small, testable, and reversible.
+## Milestones
 
----
+### Milestone 0 -- Stability
+- H1: CLI regression tests
+- H2: Golden output tests
 
-## Iteration P1 — Packaging cleanup
+### Milestone 1 -- Duplicate Detection
+- B3 hardening
+- B3 validation pass
+- B3 reporting refinement
 
-Goal: remove packaging debt and align public project metadata with the real state of the tool.
+### Milestone 2 -- Crawl Quality
+- URL normalization improvements
+- query-shape caps per path
+- path-depth caps
+- crawl stability guardrails
 
-Scope:
-- clean `pyproject.toml` metadata
-- remove deprecated packaging fields and warnings
-- tighten `MANIFEST.in`
-- align `README.md`, `CHANGELOG.md`, `ROADMAP.md`, `RELEASING.md`
-- harden `.gitignore` so local artifacts never leak into releases
+### Milestone 3 -- SEO Auditing
+- metadata checks
+- canonical checks
+- status code & redirect analysis
+- internal linking signals
+- initial SEO reporting layer ✅
 
-Acceptance:
-- `py -m build --sdist --wheel` passes
-- `py -m twine check` passes
-- packaging warnings are reduced or removed
-- metadata tests pass
+### Milestone 4 -- AI Crawler Optimization
+- robots.txt analysis ✅
+- sitemap health checks ✅
+- JS accessibility signals ✅
+- initial AI readiness reporting layer ✅
 
-Status: **in progress with this iteration**
+### Milestone 5 -- Reporting & Developer Experience
+- report layout improvements ✅
+- CLI usability improvements ✅
+- packaging/version metadata alignment ✅
+- initial reporting polish layer integrated ✅
 
----
-
-## Iteration P2 — Output contracts
-
-Goal: freeze the most important output shapes so future refactors cannot silently break consumers.
-
-Scope:
-- contract tests for `run.json`
-- contract tests for `diff.json`
-- contract tests for `quality_summary.json`
-- stronger golden checks on critical nested fields
-- schema/version notes in docs
-
-Acceptance:
-- contract tests fail on accidental output drift
-- top-level and critical nested fields are explicitly covered
-- docs describe the intended output contract
-
----
-
-## Iteration P3 — Reliability and diagnostics
-
-Goal: improve production robustness without changing product scope.
-
-Scope:
-- normalize error messages and warning classes
-- improve exit-code consistency
-- add clearer runtime diagnostics/logging
-- make failure causes easier to triage in CLI output and reports
-
-Acceptance:
-- failures are easier to classify
-- warnings vs hard failures are clearer
-- runner and CLI messages are consistent
-
----
-
-## Iteration P4 — Validation corpus
-
-Goal: validate the tool beyond a single favorite smoke target.
-
-Scope:
-- richer local fixture(s)
-- more than one live smoke target
-- fast vs live validation profile separation
-- confidence checks across different site shapes
-
-Acceptance:
-- validation no longer depends on one site only
-- live smoke checks remain optional but representative
-- false confidence from a single target is reduced
-
----
-
-## Target outcome
+## Target Outcome
 
 A Windows-first CLI tool capable of:
 - crawling and analyzing websites
-- detecting structural and content issues
+- detecting structural SEO issues
 - identifying duplicate content clusters
 - evaluating AI crawler accessibility
 - generating structured audit reports
-- building and shipping as a public Python package with a stable release process
+
+
+### Milestone 6 -- Packaging & Release Prep
+- pyproject.toml packaging metadata ✅
+- module entrypoint (`python -m site_inspector`) ✅
+- console script metadata (`site-inspector`) ✅
+- install documentation ✅
+
+
+### Production Hardening
+- P1: packaging cleanup ✅
+- P2: output contracts and golden contract tests ✅ (this patch)
+- P3: reliability & diagnostics
+- P4: validation corpus

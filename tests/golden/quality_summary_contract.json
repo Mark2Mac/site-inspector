@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "required": [
+    "generated_at",
+    "pages_tested",
+    "pages_failed",
+    "passed",
+    "budget",
+    "lighthouse_workers",
+    "results",
+    "failures"
+  ],
+  "properties": {
+    "generated_at": {
+      "type": "string"
+    },
+    "pages_tested": {
+      "type": "integer"
+    },
+    "pages_failed": {
+      "type": "integer"
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "budget": {
+      "type": "object"
+    },
+    "lighthouse_workers": {
+      "type": "integer"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "url",
+          "artifacts",
+          "rc",
+          "error",
+          "scores",
+          "budget_eval"
+        ]
+      }
+    },
+    "failures": {
+      "type": "array"
+    },
+    "selection": {
+      "type": "object"
+    },
+    "selected_urls": {
+      "type": "array"
+    }
+  }
+}

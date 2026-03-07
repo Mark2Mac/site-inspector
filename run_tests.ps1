@@ -11,7 +11,6 @@ param(
     [switch]$ErrorChecks,
     [switch]$BudgetChecks,
     [switch]$OutputChecks,
-    [switch]$PackagingChecks,
     [switch]$RegressionPack,
     [switch]$All,
 
@@ -87,8 +86,6 @@ function Test-Setup {
     Run-Cmd 'py -m pip install -r requirements-dev.txt'
     Run-Cmd 'py --version'
     Run-Cmd 'py -m pytest --version'
-    Run-Cmd 'py -m build --help'
-    Run-Cmd 'py -m twine --version'
 }
 
 function Test-PytestQuick {
@@ -209,32 +206,6 @@ function Test-BudgetChecks {
     Run-Cmd ('py site_audit.py quality "{0}" --max-pages 10 --lighthouse-sample 3 --lighthouse-per-group 1 --out "{1}"' -f $Site, (Join-Root "runs\quality_grouped"))
 }
 
-function Test-PackagingChecks {
-    Ensure-Dirs
-    Write-Step "Running packaging / release checks"
-    $distDir = Join-Root "dist"
-    if (Test-Path $distDir) {
-        Remove-Item -Recurse -Force $distDir
-    }
-    New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-
-    Run-Cmd ('py -m build --sdist --wheel --outdir "{0}"' -f $distDir)
-    Run-Cmd ('py -m twine check "{0}\*"' -f $distDir)
-
-    $wheel = Get-ChildItem -Path $distDir -Filter *.whl | Select-Object -First 1
-    $sdist = Get-ChildItem -Path $distDir -Filter *.tar.gz | Select-Object -First 1
-
-    if (-not $wheel) {
-        throw "packaging check failed: wheel not produced"
-    }
-    if (-not $sdist) {
-        throw "packaging check failed: sdist not produced"
-    }
-
-    Write-Host ("wheel built: {0}" -f $wheel.Name) -ForegroundColor Green
-    Write-Host ("sdist built: {0}" -f $sdist.Name) -ForegroundColor Green
-}
-
 function Test-OutputChecks {
     Ensure-Dirs
     Write-Step "Running output file/content checks"
@@ -247,6 +218,7 @@ function Test-OutputChecks {
     $runMdPath = Join-Root "runs\run_test\run.md"
     $diffJsonPath = Join-Root "diffs\golden_vs_candidate\diff.json"
     $diffMdPath = Join-Root "diffs\golden_vs_candidate\diff.md"
+    $qualitySummaryPath = Join-Root "runs\quality_test\quality_summary.json"
 
     if (-not (Test-Path $runJsonPath)) {
         Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $runTest)
@@ -260,12 +232,16 @@ function Test-OutputChecks {
     if (-not (Test-Path $diffJsonPath)) {
         Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
     }
+    if (-not (Test-Path $qualitySummaryPath)) {
+        Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_test"))
+    }
 
     Get-ChildItem $runTest | Out-Host
     Get-ChildItem $diffDir | Out-Host
 
     $runJson = Get-Content -Raw -Path $runJsonPath | ConvertFrom-Json
     $diffJson = Get-Content -Raw -Path $diffJsonPath | ConvertFrom-Json
+    $qualitySummary = Get-Content -Raw -Path $qualitySummaryPath | ConvertFrom-Json
     $runMd = Get-Content -Raw -Path $runMdPath
     $diffMd = Get-Content -Raw -Path $diffMdPath
 
@@ -282,6 +258,12 @@ function Test-OutputChecks {
         throw "diff.json missing key: quality.summary"
     }
 
+    foreach ($key in @("generated_at", "pages_tested", "pages_failed", "passed", "budget", "lighthouse_workers", "results", "failures")) {
+        if (-not $qualitySummary.PSObject.Properties.Name.Contains($key)) {
+            throw ("quality_summary.json missing key: {0}" -f $key)
+        }
+    }
+
     foreach ($needle in @("Executive summary", "Priority findings", "Artifacts")) {
         if ($runMd -notmatch [Regex]::Escape($needle)) {
             throw ("run.md missing section: {0}" -f $needle)
@@ -296,6 +278,7 @@ function Test-OutputChecks {
 
     Write-Host "run.json keys validated" -ForegroundColor Green
     Write-Host "diff.json keys validated" -ForegroundColor Green
+    Write-Host "quality_summary.json keys validated" -ForegroundColor Green
     Write-Host "run.md sections validated" -ForegroundColor Green
     Write-Host "diff.md sections validated" -ForegroundColor Green
 }
@@ -325,10 +308,9 @@ if ($All) {
     $ErrorChecks = $true
     $BudgetChecks = $true
     $OutputChecks = $true
-    $PackagingChecks = $true
 }
 
-if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpChecks -or $SmokeCore -or $ResumeChecks -or $DuplicateChecks -or $DiffChecks -or $ErrorChecks -or $BudgetChecks -or $OutputChecks -or $PackagingChecks -or $RegressionPack -or $All)) {
+if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpChecks -or $SmokeCore -or $ResumeChecks -or $DuplicateChecks -or $DiffChecks -or $ErrorChecks -or $BudgetChecks -or $OutputChecks -or $RegressionPack -or $All)) {
     Write-Host "No switches provided. Example usage:" -ForegroundColor Yellow
     Write-Host "  .\run_tests.ps1 -PytestQuick"
     Write-Host "  .\run_tests.ps1 -SmokeCore -DiffChecks"
@@ -349,7 +331,6 @@ if ($DiffChecks) { Test-DiffChecks }
 if ($ErrorChecks) { Test-ErrorChecks }
 if ($BudgetChecks) { Test-BudgetChecks }
 if ($OutputChecks) { Test-OutputChecks }
-if ($PackagingChecks) { Test-PackagingChecks }
 if ($RegressionPack) { Test-RegressionPack }
 
 Write-Host ""

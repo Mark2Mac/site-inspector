@@ -1,0 +1,100 @@
+{
+  "type": "object",
+  "required": [
+    "version",
+    "generated_at",
+    "target_url",
+    "host",
+    "crawl",
+    "posture",
+    "quality",
+    "timings",
+    "duplicates",
+    "seo",
+    "ai"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "target_url": {
+      "type": "string"
+    },
+    "host": {
+      "type": "string"
+    },
+    "crawl": {
+      "type": "object",
+      "required": [
+        "generated_at",
+        "target_url",
+        "host",
+        "pages",
+        "errors"
+      ]
+    },
+    "posture": {
+      "type": "object",
+      "required": [
+        "generated_at",
+        "target_url",
+        "host",
+        "http",
+        "fingerprinting"
+      ]
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "generated_at",
+        "pages_tested",
+        "pages_failed",
+        "passed",
+        "budget",
+        "lighthouse_workers",
+        "results",
+        "failures"
+      ]
+    },
+    "timings": {
+      "type": "object",
+      "required": [
+        "total_s"
+      ]
+    },
+    "duplicates": {
+      "type": "object",
+      "required": [
+        "duplicate_groups",
+        "duplicate_group_count",
+        "duplicate_url_count",
+        "validation"
+      ]
+    },
+    "seo": {
+      "type": "object",
+      "required": [
+        "pages_analyzed",
+        "metadata",
+        "canonicals",
+        "status",
+        "internal_linking",
+        "issues"
+      ]
+    },
+    "ai": {
+      "type": "object",
+      "required": [
+        "pages_analyzed",
+        "robots",
+        "sitemap",
+        "meta_robots",
+        "js_accessibility",
+        "issues"
+      ]
+    }
+  }
+}

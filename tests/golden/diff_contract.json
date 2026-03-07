@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "required": [
+    "version",
+    "generated_at",
+    "runA",
+    "runB",
+    "passed",
+    "fail_reasons",
+    "pages",
+    "third_parties",
+    "tech",
+    "quality",
+    "extractability"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "runA": {
+      "type": "object",
+      "required": [
+        "generated_at",
+        "target_url"
+      ]
+    },
+    "runB": {
+      "type": "object",
+      "required": [
+        "generated_at",
+        "target_url"
+      ]
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "fail_reasons": {
+      "type": "array"
+    },
+    "pages": {
+      "type": "object",
+      "required": [
+        "added",
+        "removed",
+        "unchanged"
+      ]
+    },
+    "third_parties": {
+      "type": "object",
+      "required": [
+        "added",
+        "removed",
+        "unchanged",
+        "allowlist_used"
+      ]
+    },
+    "tech": {
+      "type": "object",
+      "required": [
+        "wappalyzer",
+        "builtwith"
+      ]
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "available",
+        "summary",
+        "per_page",
+        "regressions"
+      ]
+    },
+    "extractability": {
+      "type": "any"
+    }
+  }
+}
