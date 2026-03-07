@@ -75,5 +75,15 @@ A Windows-first CLI tool capable of:
 - P1 Packaging cleanup: done
 - P2 Output contracts: done
 - P3 Reliability & diagnostics: done
-- P4 Validation corpus: next
+- P4 Validation corpus: done
 
+
+
+## Production hardening status
+
+- P1 Packaging cleanup: done
+- P2 Output contracts: done
+- P3 Reliability & diagnostics: done
+- P4 Validation corpus: done
+
+Production hardening baseline is complete. Future work can focus on broader site coverage and feature expansion rather than release readiness.

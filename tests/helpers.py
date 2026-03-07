@@ -12,6 +12,10 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def fixture_root(name: str) -> Path:
+    return repo_root() / "tests" / "fixtures" / name
+
+
 def run_cli(args: Iterable[str], env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, "site_audit.py", *list(args)]
     env = os.environ.copy()

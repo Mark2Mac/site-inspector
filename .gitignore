@@ -1,31 +1,43 @@
 # Python caches
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv/
 venv/
+env/
 
 # Packaging artifacts
 build/
 dist/
 *.egg-info/
 .eggs/
+pip-wheel-metadata/
 
-# Node artifacts
-node_modules/
-
-# Test / local artifacts
+# Local tool artifacts
 .site_inspector_local/
 runs/
 diffs/
 inspect_*/
 
+# Coverage / test outputs
+.coverage
+.coverage.*
+htmlcov/
+
 # Logs
 *.log
+
+# Node artifacts
+node_modules/
 
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Editors
+.vscode/
+.idea/

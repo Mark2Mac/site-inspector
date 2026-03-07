@@ -79,3 +79,20 @@ By default, common CLI failures are rendered as short human-readable errors inst
 
 Set `SITE_INSPECTOR_DEBUG=1` to keep full tracebacks during local debugging.
 
+
+
+## Validation profiles
+
+For day-to-day work, use the deterministic local validation corpus:
+
+```powershell
+.\run_tests.ps1 -FastAll
+```
+
+For full live smoke coverage (including the external target configured in the runner):
+
+```powershell
+.\run_tests.ps1 -All
+```
+
+The local corpus lives under `tests/fixtures/corpus_site` and is served dynamically during tests, including `robots.txt` and `sitemap.xml`.

@@ -11,6 +11,8 @@ param(
     [switch]$ErrorChecks,
     [switch]$BudgetChecks,
     [switch]$OutputChecks,
+    [switch]$FixtureCorpusChecks,
+    [switch]$FastAll,
     [switch]$RegressionPack,
     [switch]$All,
 
@@ -283,6 +285,12 @@ function Test-OutputChecks {
     Write-Host "diff.md sections validated" -ForegroundColor Green
 }
 
+
+function Test-FixtureCorpusChecks {
+    Write-Step "Running local validation corpus checks"
+    Run-Cmd 'py -m pytest -q tests/test_validation_corpus.py'
+}
+
 function Test-RegressionPack {
     Write-Step "Running regression pack"
     Test-PytestQuick
@@ -293,6 +301,15 @@ function Test-RegressionPack {
     $script:PytestLoops = $oldLoops
     Test-SmokeCore
     Test-DiffChecks
+}
+
+if ($FastAll) {
+    $Setup = $true
+    $PytestQuick = $true
+    $HelpChecks = $true
+    $FixtureCorpusChecks = $true
+    $OutputChecks = $true
+    $FixtureCorpusChecks = $true
 }
 
 if ($All) {
@@ -308,13 +325,16 @@ if ($All) {
     $ErrorChecks = $true
     $BudgetChecks = $true
     $OutputChecks = $true
+    $FixtureCorpusChecks = $true
 }
 
-if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpChecks -or $SmokeCore -or $ResumeChecks -or $DuplicateChecks -or $DiffChecks -or $ErrorChecks -or $BudgetChecks -or $OutputChecks -or $RegressionPack -or $All)) {
+if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpChecks -or $SmokeCore -or $ResumeChecks -or $DuplicateChecks -or $DiffChecks -or $ErrorChecks -or $BudgetChecks -or $OutputChecks -or $FixtureCorpusChecks -or $FastAll -or $RegressionPack -or $All)) {
     Write-Host "No switches provided. Example usage:" -ForegroundColor Yellow
     Write-Host "  .\run_tests.ps1 -PytestQuick"
     Write-Host "  .\run_tests.ps1 -SmokeCore -DiffChecks"
     Write-Host "  .\run_tests.ps1 -All"
+    Write-Host "  .\run_tests.ps1 -FastAll"
+    Write-Host "  .\run_tests.ps1 -FixtureCorpusChecks"
     Write-Host "  .\run_tests.ps1 -All -RootDir .site_inspector_local"
     exit 0
 }
@@ -331,6 +351,7 @@ if ($DiffChecks) { Test-DiffChecks }
 if ($ErrorChecks) { Test-ErrorChecks }
 if ($BudgetChecks) { Test-BudgetChecks }
 if ($OutputChecks) { Test-OutputChecks }
+if ($FixtureCorpusChecks) { Test-FixtureCorpusChecks }
 if ($RegressionPack) { Test-RegressionPack }
 
 Write-Host ""

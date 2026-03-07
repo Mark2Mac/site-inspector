@@ -1,3 +1,10 @@
+
+## 0.7.0-post-p4
+
+- add deterministic local validation corpus with dynamic robots.txt and sitemap.xml
+- add validation corpus tests and fast-vs-live runner modes
+- mark production hardening iteration P4 complete
+
 # Changelog
 
 ## Unreleased
