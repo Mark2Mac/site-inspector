@@ -69,3 +69,10 @@ A Windows-first CLI tool capable of:
 - identifying duplicate content clusters
 - evaluating AI crawler accessibility
 - generating structured audit reports
+
+
+### Milestone 6 -- Packaging & Release Prep
+- pyproject.toml packaging metadata ✅
+- module entrypoint (`python -m site_inspector`) ✅
+- console script metadata (`site-inspector`) ✅
+- install documentation ✅

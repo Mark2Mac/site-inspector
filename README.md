@@ -10,6 +10,28 @@ The project focuses on:
 -   SEO signal auditing
 -   AI crawler accessibility evaluation
 
+
+## Installation
+
+Editable install for local development:
+
+```powershell
+py -m pip install -e .
+```
+
+Package entrypoint:
+
+```powershell
+py -m site_inspector --version
+py -m site_inspector run https://example.com --max-pages 5 --skip-playwright
+```
+
+Legacy script entrypoint remains supported:
+
+```powershell
+py site_audit.py --version
+```
+
 ## Example Usage
 
 Run a crawl:

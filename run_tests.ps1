@@ -110,6 +110,8 @@ function Test-HelpChecks {
     Write-Step "Checking CLI help"
     Run-Cmd 'py site_audit.py --help'
     Run-Cmd 'py site_audit.py --version'
+    Run-Cmd 'py -m site_inspector --version'
+    Run-Cmd 'py -m site_inspector --help'
     Run-Cmd 'py site_audit.py crawl --help'
     Run-Cmd 'py site_audit.py quality --help'
     Run-Cmd 'py site_audit.py playwright --help'

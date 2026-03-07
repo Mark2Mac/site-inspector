@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Packaging metadata via `pyproject.toml`
+- `python -m site_inspector` module entrypoint
+- Console script metadata for `site-inspector`
 - Separate worker pools (net vs heavy)
 - Host throttling + retries
 - Resumeable runs via per-page caching
