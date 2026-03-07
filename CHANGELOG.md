@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Public packaging / release hardening
+- Build metadata validation with `python -m build` and `twine check`
+- Release checklist and manifest pruning for cleaner distributions
 - Packaging metadata via `pyproject.toml`
 - `python -m site_inspector` module entrypoint
 - Console script metadata for `site-inspector`

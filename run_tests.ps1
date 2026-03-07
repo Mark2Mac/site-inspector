@@ -11,6 +11,7 @@ param(
     [switch]$ErrorChecks,
     [switch]$BudgetChecks,
     [switch]$OutputChecks,
+    [switch]$PackagingChecks,
     [switch]$RegressionPack,
     [switch]$All,
 
@@ -86,6 +87,8 @@ function Test-Setup {
     Run-Cmd 'py -m pip install -r requirements-dev.txt'
     Run-Cmd 'py --version'
     Run-Cmd 'py -m pytest --version'
+    Run-Cmd 'py -m build --help'
+    Run-Cmd 'py -m twine --version'
 }
 
 function Test-PytestQuick {
@@ -206,6 +209,32 @@ function Test-BudgetChecks {
     Run-Cmd ('py site_audit.py quality "{0}" --max-pages 10 --lighthouse-sample 3 --lighthouse-per-group 1 --out "{1}"' -f $Site, (Join-Root "runs\quality_grouped"))
 }
 
+function Test-PackagingChecks {
+    Ensure-Dirs
+    Write-Step "Running packaging / release checks"
+    $distDir = Join-Root "dist"
+    if (Test-Path $distDir) {
+        Remove-Item -Recurse -Force $distDir
+    }
+    New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+    Run-Cmd ('py -m build --sdist --wheel --outdir "{0}"' -f $distDir)
+    Run-Cmd ('py -m twine check "{0}\*"' -f $distDir)
+
+    $wheel = Get-ChildItem -Path $distDir -Filter *.whl | Select-Object -First 1
+    $sdist = Get-ChildItem -Path $distDir -Filter *.tar.gz | Select-Object -First 1
+
+    if (-not $wheel) {
+        throw "packaging check failed: wheel not produced"
+    }
+    if (-not $sdist) {
+        throw "packaging check failed: sdist not produced"
+    }
+
+    Write-Host ("wheel built: {0}" -f $wheel.Name) -ForegroundColor Green
+    Write-Host ("sdist built: {0}" -f $sdist.Name) -ForegroundColor Green
+}
+
 function Test-OutputChecks {
     Ensure-Dirs
     Write-Step "Running output file/content checks"
@@ -296,9 +325,10 @@ if ($All) {
     $ErrorChecks = $true
     $BudgetChecks = $true
     $OutputChecks = $true
+    $PackagingChecks = $true
 }
 
-if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpChecks -or $SmokeCore -or $ResumeChecks -or $DuplicateChecks -or $DiffChecks -or $ErrorChecks -or $BudgetChecks -or $OutputChecks -or $RegressionPack -or $All)) {
+if (-not ($Setup -or $PytestQuick -or $PytestVerbose -or $PytestLoop -or $HelpChecks -or $SmokeCore -or $ResumeChecks -or $DuplicateChecks -or $DiffChecks -or $ErrorChecks -or $BudgetChecks -or $OutputChecks -or $PackagingChecks -or $RegressionPack -or $All)) {
     Write-Host "No switches provided. Example usage:" -ForegroundColor Yellow
     Write-Host "  .\run_tests.ps1 -PytestQuick"
     Write-Host "  .\run_tests.ps1 -SmokeCore -DiffChecks"
@@ -319,6 +349,7 @@ if ($DiffChecks) { Test-DiffChecks }
 if ($ErrorChecks) { Test-ErrorChecks }
 if ($BudgetChecks) { Test-BudgetChecks }
 if ($OutputChecks) { Test-OutputChecks }
+if ($PackagingChecks) { Test-PackagingChecks }
 if ($RegressionPack) { Test-RegressionPack }
 
 Write-Host ""

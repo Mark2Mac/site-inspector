@@ -14,7 +14,7 @@ dependencies = [
   "requests>=2.31.0",
   "beautifulsoup4>=4.12.0",
 ]
-keywords = ["seo", "crawler", "audit", "lighthouse", "playwright"]
+keywords = ["seo", "crawler", "audit", "lighthouse", "playwright", "site-inspector", "technical-seo", "ai-crawler"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -33,3 +33,9 @@ site-inspector = "site_inspector.cli:main"
 [tool.setuptools.packages.find]
 include = ["site_inspector*"]
 exclude = ["tests*"]
+
+[project.urls]
+Homepage = "https://example.com/site-inspector"
+Documentation = "https://example.com/site-inspector/docs"
+Repository = "https://example.com/site-inspector/repo"
+Issues = "https://example.com/site-inspector/issues"

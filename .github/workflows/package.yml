@@ -1,0 +1,44 @@
+name: package
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-package:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          py -m pip install --upgrade pip
+          py -m pip install -r requirements-dev.txt
+          py -m pip install -e .
+
+      - name: Run tests
+        run: |
+          py -m pytest -q
+
+      - name: Build package
+        run: |
+          py -m build --sdist --wheel --outdir dist
+
+      - name: Validate package metadata
+        run: |
+          py -m twine check dist/*
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-inspector-dist
+          path: dist/*

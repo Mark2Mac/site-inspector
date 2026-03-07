@@ -94,3 +94,23 @@ py site_audit.py diff runs\golden runs\candidate --out diffs\golden_vs_candidate
 ```
 
 `diff` now accepts either a run directory containing `run.json` or the `run.json` file directly, and returns a clearer error when the path is wrong.
+
+
+## Public packaging / release
+
+Build release artifacts locally:
+
+```powershell
+py -m build --sdist --wheel --outdir .site_inspector_local\dist
+py -m twine check .site_inspector_local\dist\*
+```
+
+Recommended release smoke checks:
+
+```powershell
+py -m site_inspector --version
+py -m pytest -q
+.\run_tests.ps1 -All
+```
+
+See `RELEASING.md` for the full checklist.
