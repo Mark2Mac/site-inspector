@@ -1,44 +1,4 @@
-"""
-inspect.py (v0.4) — Windows-first Site Inspector
-v0.4 adds: PLAYWRIGHT mode (HAR + screenshots + DOM + JS-disabled content check)
-
-Features:
-- v0.1: crawl + posture
-- v0.2: lighthouse quality + budgets + CI-friendly exit codes
-- v0.3: diff between runs (regressions + new third parties allowlist)
-- v0.4: playwright artifacts (HAR/screenshot/DOM/text) + basic "extractability" (JS-disabled)
-
-Outputs (in --out dir):
-- run.json, run.md
-- pages.json
-- posture.json, posture.md
-- quality_summary.json + lighthouse/*.report.{json,html}
-- playwright/{slug}/
-    - har.json
-    - screenshot.png
-    - dom.html
-    - text.txt
-    - js_disabled_dom.html
-    - js_disabled_text.txt
-    - playwright_summary.json
-- raw/* artifacts
-- diff.json, diff.md (diff mode)
-
-Prereqs (Windows):
-- Python 3.10+
-- Node.js in PATH (npx/node)
-- Chrome/Chromium available (Lighthouse launches Chrome)
-- Playwright will install Chromium on first use into .cache/playwright
-
-Usage:
-  python inspect.py run https://example.com --max-pages 10 --budget budgets.json
-  python inspect.py playwright https://example.com --max-pages 10
-  python inspect.py diff runs/runA runs/runB
-
-Exit codes:
-- run/quality: 0 if passed budgets, 1 otherwise
-- diff: 0 if no regressions (and no new disallowed third parties), 1 if regressions found
-"""
+"""Shared utilities: URL normalization, subprocess helpers, and file I/O."""
 
 from __future__ import annotations
 
