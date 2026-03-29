@@ -228,7 +228,6 @@ The test suite covers:
 - diff error handling
 - validation corpus behavior
 - packaging metadata
-- public export checks
 
 ---
 
@@ -238,6 +237,8 @@ The test suite covers:
 site_inspector/
 ├── cli.py
 ├── crawl.py
+├── posture.py
+├── inner_collectors.py
 ├── seo_audit.py
 ├── ai_audit.py
 ├── lighthouse.py
@@ -245,8 +246,11 @@ site_inspector/
 ├── diffing.py
 ├── duplicates.py
 ├── reporting.py
-├── posture.py
-└── utils.py
+├── log.py
+├── utils.py
+└── scripts/
+    ├── inner_collector.py
+    └── playwright_runner.cjs
 
 tests/
 ├── fixtures/
@@ -280,18 +284,6 @@ site-inspector --help
 
 ---
 
-## Development model
-
-This project is designed to support a **private development repo** and a **clean public export** flow.
-
-That allows:
-- full iteration and experimentation in private
-- curated, fingerprint-scrubbed public snapshots
-- cleaner presentation on GitHub
-- safer release hygiene
-
----
-
 ## Current strengths
 
 - deterministic CLI workflow
@@ -310,7 +302,7 @@ That allows:
 - stronger validation semantics for duplicate / template signals
 - graph intelligence and richer site structure analysis
 - deeper structured-data and discoverability checks
-- continued hardening of the public export workflow
+- additional pipeline-friendly output formats
 
 See `ROADMAP.md` for planning details.
 
