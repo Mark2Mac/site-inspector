@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from urllib.parse import urlparse
 
-from .utils import _run, pct01_to_pct, safe_write, slugify_url_for_filename, which, now_iso
+from .utils import _run, safe_write, slugify_url_for_filename, which, now_iso, ensure_npx_available, _build_windows_cmd_for_exe
 
 
 # -----------------------------
@@ -30,22 +30,6 @@ DEFAULT_BUDGET: Dict[str, Any] = {
     }
 }
 
-
-def ensure_npx_available() -> None:
-    if which("npx") is None and which("npx.cmd") is None:
-        raise RuntimeError(
-            "npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal. "
-            "Tip: in PowerShell run `where npx` to verify."
-        )
-
-
-def _build_windows_cmd_for_exe(exe_path: str, args: List[str]) -> List[str]:
-    """Build a subprocess command that works on Windows for .cmd/.bat wrappers."""
-    low = exe_path.lower()
-    if low.endswith(".cmd") or low.endswith(".bat"):
-        # cmd.exe is required for wrapper scripts when shell=False
-        return ["cmd", "/c", exe_path, *args]
-    return [exe_path, *args]
 
 
 def run_lighthouse(url: str, *, out_dir: Path, timeout_s: int) -> Dict[str, Any]:

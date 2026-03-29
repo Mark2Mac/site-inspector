@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import threading
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -9,9 +8,8 @@ from typing import Any, Dict, List, Set, Tuple
 
 import xml.etree.ElementTree as ET
 
-from .inner_collectors import make_temp_venv, run_inner
+from .inner_collectors import ensure_inner_deps, get_or_create_inner_venv, run_inner
 from .utils import (
-    _run,
     clean_url,
     host_from_url,
     is_same_host,
@@ -109,19 +107,8 @@ def discover_pages(
     max_path_depth = 6
     path_depth_cap_hits = 0
 
-    tmp_root, py, pip = make_temp_venv()
-
-    # Install deps once (shared by all workers)
-    deps = [
-        "requests>=2.31.0",
-        "beautifulsoup4>=4.12.0",
-        "lxml>=5.0.0",
-        "python-Wappalyzer>=0.3.1",
-        "builtwith>=1.3.4",
-    ]
-    rc, so, se = _run([str(pip), "install", "--quiet", "--disable-pip-version-check"] + deps, timeout=900)
-    safe_write(raw_dir / "pip_install.stdout.txt", so)
-    safe_write(raw_dir / "pip_install.stderr.txt", se)
+    venv_dir, py, pip = get_or_create_inner_venv()
+    ensure_inner_deps(pip, venv_dir, raw_dir)
 
 
 
@@ -143,7 +130,7 @@ def discover_pages(
         return u
 
     # Seed posture: try to read sitemap
-    base_posture = run_inner(py, tmp_root, "posture", target_url, timeout_s, raw_dir, "posture_seed")
+    base_posture = run_inner(py, venv_dir, "posture", target_url, timeout_s, raw_dir, "posture_seed")
     sitemap_text = None
     sm = (base_posture.get("sitemap_xml") or {})
     if isinstance(sm, dict):
@@ -210,7 +197,7 @@ def discover_pages(
 
         host_sem.acquire()
         try:
-            data = run_inner(py, tmp_root, "links", url, timeout_s, raw_dir, tag)
+            data = run_inner(py, venv_dir, "links", url, timeout_s, raw_dir, tag)
         finally:
             host_sem.release()
 
@@ -327,7 +314,7 @@ def discover_pages(
 
 
     finally:
-        shutil.rmtree(tmp_root, ignore_errors=True)
+        pass  # venv is preserved for reuse across calls
 
     for u in discovered[:max_pages]:
         pid = stable_page_id(u)

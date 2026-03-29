@@ -3,181 +3,27 @@ from __future__ import annotations
 import json
 import concurrent.futures
 import os
-import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .utils import _run, safe_write, safe_write_json, slugify_url_for_filename, which, now_iso
+from .utils import _run, safe_write, slugify_url_for_filename, which, now_iso, ensure_npx_available, _build_windows_cmd_for_exe
 
 
 # -----------------------------
 # v0.4 Playwright (HAR + screenshot + DOM + JS-disabled extractability)
 # -----------------------------
 
-PLAYWRIGHT_NODE_SCRIPT = r"""
-const fs = require("fs");
-const path = require("path");
-const { chromium } = require("playwright");
+def _get_playwright_script_text() -> str:
+    script_path = Path(__file__).parent / "scripts" / "playwright_runner.cjs"
+    try:
+        return script_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"Playwright runner script not found at {script_path}. "
+            "This usually means the package was installed without the scripts/ directory. "
+            "Reinstall with: pip install -e ."
+        ) from None
 
-function ensureDir(p) { fs.mkdirSync(p, { recursive: true }); }
-function writeText(p, s) { fs.writeFileSync(p, s ?? "", { encoding: "utf-8" }); }
-
-async function grab(url, outDir, timeoutMs, jsEnabled) {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    javaScriptEnabled: jsEnabled,
-    acceptDownloads: false,
-    ignoreHTTPSErrors: true,
-    viewport: { width: 1365, height: 768 },
-  });
-
-  const page = await context.newPage();
-
-  // HAR only for JS-enabled run (meaningful network)
-  let harPath = null;
-  if (jsEnabled) {
-    harPath = path.join(outDir, "har.json");
-    await context.tracing.start({ screenshots: false, snapshots: false });
-    await context.route("**/*", route => route.continue());
-  }
-
-  const started = Date.now();
-  let result = {
-    url,
-    jsEnabled,
-    finalUrl: null,
-    status: null,
-    timings: { totalMs: null },
-    errors: [],
-    textLen: 0,
-    hasMeaningfulText: false,
-    files: {}
-  };
-
-  try {
-    const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
-    result.finalUrl = page.url();
-    result.status = resp ? resp.status() : null;
-
-    // best-effort wait for network to settle (only when JS enabled)
-    if (jsEnabled) {
-      try {
-        await page.waitForLoadState("networkidle", { timeout: Math.min(15000, timeoutMs) });
-      } catch (e) {
-        // not fatal
-      }
-    }
-
-    // screenshot
-    const screenshotPath = path.join(outDir, jsEnabled ? "screenshot.png" : "js_disabled_screenshot.png");
-    await page.screenshot({ path: screenshotPath, fullPage: true });
-    result.files.screenshot = screenshotPath;
-
-    // DOM
-    const html = await page.content();
-    const domPath = path.join(outDir, jsEnabled ? "dom.html" : "js_disabled_dom.html");
-    writeText(domPath, html);
-    result.files.dom = domPath;
-
-    // Text extract
-    const text = await page.evaluate(() => {
-      const t = document?.body?.innerText || "";
-      return t.replace(/\s+/g, " ").trim();
-    });
-    const textPath = path.join(outDir, jsEnabled ? "text.txt" : "js_disabled_text.txt");
-    writeText(textPath, text);
-    result.files.text = textPath;
-
-    result.textLen = (text || "").length;
-    result.hasMeaningfulText = result.textLen >= 200; // heuristic threshold
-
-    // Save HAR for JS-enabled by using Playwright's built-in har recorder pattern:
-    // Playwright's context.newContext({ recordHar: { path }}) is supported; we use it by re-creating context.
-  } catch (e) {
-    result.errors.push(String(e && e.message ? e.message : e));
-  } finally {
-    result.timings.totalMs = Date.now() - started;
-
-    // If JS enabled and we want HAR, easiest is to use recordHar in a second short run:
-    // (Yes it's extra time; keeps script dependency-light and stable across Playwright versions.)
-    await browser.close();
-  }
-
-  // HAR run (JS enabled only) — short & focused
-  if (jsEnabled) {
-    const browser2 = await chromium.launch({ headless: true });
-    const context2 = await browser2.newContext({
-      javaScriptEnabled: true,
-      ignoreHTTPSErrors: true,
-      recordHar: { path: path.join(outDir, "har.json"), content: "omit" },
-      viewport: { width: 1365, height: 768 },
-    });
-    const page2 = await context2.newPage();
-    try {
-      await page2.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
-    } catch (e) {
-      result.errors.push("har_run: " + String(e && e.message ? e.message : e));
-    } finally {
-      await context2.close();
-      await browser2.close();
-      result.files.har = path.join(outDir, "har.json");
-    }
-  }
-
-  return result;
-}
-
-async function main() {
-  const url = process.argv[2];
-  const outDir = process.argv[3];
-  const timeoutMs = Number(process.argv[4] || "30000");
-
-  ensureDir(outDir);
-
-  const enabled = await grab(url, outDir, timeoutMs, true);
-  const disabled = await grab(url, outDir, timeoutMs, false);
-
-  const summary = {
-    url,
-    generatedAt: new Date().toISOString(),
-    jsEnabled: enabled,
-    jsDisabled: disabled,
-    extractability: {
-      enabledTextLen: enabled.textLen,
-      disabledTextLen: disabled.textLen,
-      disabledStillReadable: disabled.hasMeaningfulText,
-      notes: disabled.hasMeaningfulText
-        ? "Content remains readable without JavaScript (good for conservative crawlers)."
-        : "Content largely requires JavaScript (may reduce extractability for some crawlers)."
-    }
-  };
-
-  const summaryPath = path.join(outDir, "playwright_summary.json");
-  writeText(summaryPath, JSON.stringify(summary, null, 2));
-  console.log(JSON.stringify(summary, null, 2));
-}
-
-main().catch((e) => {
-  console.error(String(e && e.stack ? e.stack : e));
-  process.exit(2);
-});
-"""
-
-
-def ensure_npx_available() -> None:
-    """Ensure npx is available on PATH (Windows-friendly)."""
-    if (which("npx") or which("npx.cmd") or which("npx.exe")) is None:
-        raise RuntimeError("npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal.")
-
-
-
-def _build_windows_cmd_for_exe(exe_path: str, args: List[str]) -> List[str]:
-    """Build a subprocess command that works on Windows for .cmd/.bat wrappers."""
-    exe_lower = exe_path.lower()
-    if platform.system().lower().startswith('win') and (exe_lower.endswith('.cmd') or exe_lower.endswith('.bat')):
-        # Use cmd.exe to execute batch wrappers reliably with shell=False
-        return ["cmd", "/c", exe_path, *args]
-    return [exe_path, *args]
 
 def ensure_node_available() -> None:
     if which("node") is None:
@@ -243,7 +89,7 @@ def run_playwright_for_url(url: str, *, out_dir: Path, timeout_s: int, cache_dir
     # Write JS runner into out_dir/raw (stable path, debuggable)
     js_path = raw_dir / "playwright_runner_v04.cjs"
     if not js_path.exists():
-        safe_write(js_path, PLAYWRIGHT_NODE_SCRIPT)
+        safe_write(js_path, _get_playwright_script_text())
 
     env = os.environ.copy()
     env["PLAYWRIGHT_BROWSERS_PATH"] = str(cache_dir)

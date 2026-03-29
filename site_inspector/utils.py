@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
-import platform
 import re
-import shutil
 import socket
 import ssl
 import subprocess
 import sys
-import tempfile
 import urllib.parse
-import xml.etree.ElementTree as ET
-from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Set
 
 import hashlib
+
+from .log import get_logger
+
+_log = get_logger("utils")
 
 
 # -----------------------------
@@ -310,6 +308,23 @@ def which(exe: str) -> Optional[str]:
     return None
 
 
+def ensure_npx_available() -> None:
+    """Raise RuntimeError if npx is not on PATH (Windows-friendly)."""
+    if (which("npx") or which("npx.cmd") or which("npx.exe")) is None:
+        raise RuntimeError(
+            "npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal. "
+            "Tip: in PowerShell run `where npx` to verify."
+        )
+
+
+def _build_windows_cmd_for_exe(exe_path: str, args: List[str]) -> List[str]:
+    """Build a subprocess command that works on Windows for .cmd/.bat wrappers."""
+    low = exe_path.lower()
+    if low.endswith(".cmd") or low.endswith(".bat"):
+        return ["cmd", "/c", exe_path, *args]
+    return [exe_path, *args]
+
+
 def pct01_to_pct(x: Optional[float]) -> Optional[int]:
     if x is None:
         return None
@@ -368,6 +383,6 @@ def dns_lookup_basic(host: str) -> Dict[str, List[str]]:
                 ip = sockaddr[0]
                 if ip not in res["AAAA"]:
                     res["AAAA"].append(ip)
-    except Exception:
-        pass
+    except Exception as e:
+        _log.debug("DNS lookup failed for %s: %s", host, e)
     return res
