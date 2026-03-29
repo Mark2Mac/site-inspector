@@ -29,6 +29,9 @@ dev = [
   "build>=1.2",
   "twine>=5.0",
 ]
+mcp = [
+  "mcp>=1.0",
+]
 
 [project.urls]
 Repository = "https://github.com/Mark2Mac/site-inspector"
@@ -39,6 +42,7 @@ Documentation = "https://github.com/Mark2Mac/site-inspector#readme"
 
 [project.scripts]
 site-inspector = "site_inspector.cli:main"
+site-inspector-mcp = "site_inspector.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["site_inspector*"]

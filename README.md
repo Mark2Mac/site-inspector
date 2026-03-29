@@ -32,6 +32,7 @@ Site Inspector combines multiple audit layers into one CLI workflow:
 | Layer | What gets audited |
 |---|---|
 | **Crawl** | Page discovery, normalized URLs, redirect-aware inventory, guardrails |
+| **Link Graph** | Internal PageRank, HITS hub/authority, orphan pages, dead ends, articulation points, SCCs |
 | **SEO** | Titles, meta descriptions, H1s, canonicals, status-code issues, internal linking |
 | **AI crawler readiness** | `robots.txt`, `sitemap.xml`, `noindex`, JS-disabled readability |
 | **Quality** | Lighthouse scores, budgets, grouped sampling |
@@ -72,16 +73,65 @@ site-inspector run https://example.com --max-pages 50
 Typical output lands in an auto-named directory such as:
 
 ```text
-run.md
-run.json
-pages.json
-posture.json
-quality_summary.json
-playwright_summary.json
+run.html                 ← interactive report (open in browser)
+run.md                   ← human-readable markdown
+run.json                 ← structured output for automation
+pages.json               ← per-page crawl data
+posture.json             ← TLS, tech stack, third parties
+quality_summary.json     ← Lighthouse scores
 ```
 
-`run.md` is the human-readable report.  
+`run.html` is a self-contained interactive report with SVG charts, link graph metrics, and collapsible sections — works fully offline.
 `run.json` is the structured output for automation and diffing.
+
+---
+
+## MCP Server (AI assistant integration)
+
+Site Inspector ships an [MCP](https://modelcontextprotocol.io) server so any AI assistant can audit websites directly from a conversation — no terminal needed.
+
+```bash
+pip install "site-inspector[mcp]"
+```
+
+Configure in Claude Desktop (`~/.claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "site-inspector": {
+      "command": "site-inspector-mcp"
+    }
+  }
+}
+```
+
+Configure in Claude Code (global or project MCP settings):
+
+```json
+{
+  "mcpServers": {
+    "site-inspector": {
+      "command": "site-inspector-mcp"
+    }
+  }
+}
+```
+
+### Available MCP tools
+
+| Tool | Description |
+|---|---|
+| `inspect_site(url, max_pages)` | Full audit — crawl, SEO, link graph, AI readiness |
+| `diff_site_runs(run_a, run_b)` | Compare two audit runs, report regressions |
+| `load_site_run(run_dir)` | Summarize an existing run from disk |
+| `site_graph_insights(run_dir)` | Deep link graph analysis (PageRank, HITS, bottlenecks) |
+
+Once configured, you can ask Claude:
+
+> "Audit https://example.com and tell me the top SEO issues"
+> "Which pages have zero inbound links?"
+> "Compare the run from yesterday to today's run"
 
 ---
 
