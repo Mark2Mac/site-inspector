@@ -318,6 +318,14 @@ See `ROADMAP.md` for planning details.
 
 ---
 
+## Example
+
+Site Inspector was originally built to audit [dedicatodesign.com](https://www.dedicatodesign.com)
+during a full site rebuild. The before/after diffing workflow was designed around that
+real-world use case.
+
+---
+
 ## License
 
 MIT — see `LICENSE`.
