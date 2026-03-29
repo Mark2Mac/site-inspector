@@ -19,7 +19,7 @@ def test_pyproject_metadata_is_aligned_for_public_packaging() -> None:
     assert project["license"] == "MIT"
     assert project["scripts"]["site-inspector"] == "site_inspector.cli:main"
 
-    assert project["authors"][0]["name"] != "OpenAI / User project"
+    assert project["authors"][0]["name"] not in ("", "OpenAI / User project", "YOUR_GITHUB_USERNAME")
     assert "example.invalid" not in urls["Homepage"]
     assert "example.invalid" not in urls["Documentation"]
     assert "example.invalid" not in urls["Changelog"]
