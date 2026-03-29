@@ -27,7 +27,15 @@ INNER_DEPS = [
 # -----------------------------
 
 def _get_inner_script_text() -> str:
-    return (Path(__file__).parent / "scripts" / "inner_collector.py").read_text(encoding="utf-8")
+    script_path = Path(__file__).parent / "scripts" / "inner_collector.py"
+    try:
+        return script_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"Inner collector script not found at {script_path}. "
+            "This usually means the package was installed without the scripts/ directory. "
+            "Reinstall with: pip install -e ."
+        ) from None
 
 
 
@@ -99,8 +107,12 @@ def ensure_inner_deps(pip: Path, venv_dir: Path, out_raw_dir: Path) -> None:
 
 def run_inner(py: Path, venv_dir: Path, mode: str, url: str, timeout_s: int, out_raw_dir: Path, tag: str) -> Dict[str, Any]:
     inner_path = venv_dir / "inner.py"
-    if not inner_path.exists():
-        inner_path.write_text(_get_inner_script_text(), encoding="utf-8")
+    script_text = _get_inner_script_text()
+    script_hash = hashlib.sha1(script_text.encode("utf-8")).hexdigest()
+    hash_marker = venv_dir / ".inner_script_hash"
+    if not inner_path.exists() or not hash_marker.exists() or hash_marker.read_text(encoding="utf-8").strip() != script_hash:
+        inner_path.write_text(script_text, encoding="utf-8")
+        hash_marker.write_text(script_hash, encoding="utf-8")
 
     rc, so, se = _run([str(py), str(inner_path), mode, url, "--timeout", str(timeout_s)], timeout=max(60, timeout_s + 30))
     safe_write(out_raw_dir / f"{tag}.stdout.json", so)

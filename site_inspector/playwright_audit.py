@@ -3,11 +3,10 @@ from __future__ import annotations
 import json
 import concurrent.futures
 import os
-import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .utils import _run, safe_write, safe_write_json, slugify_url_for_filename, which, now_iso
+from .utils import _run, safe_write, slugify_url_for_filename, which, now_iso, ensure_npx_available, _build_windows_cmd_for_exe
 
 
 # -----------------------------
@@ -15,23 +14,16 @@ from .utils import _run, safe_write, safe_write_json, slugify_url_for_filename, 
 # -----------------------------
 
 def _get_playwright_script_text() -> str:
-    return (Path(__file__).parent / "scripts" / "playwright_runner.cjs").read_text(encoding="utf-8")
+    script_path = Path(__file__).parent / "scripts" / "playwright_runner.cjs"
+    try:
+        return script_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"Playwright runner script not found at {script_path}. "
+            "This usually means the package was installed without the scripts/ directory. "
+            "Reinstall with: pip install -e ."
+        ) from None
 
-
-def ensure_npx_available() -> None:
-    """Ensure npx is available on PATH (Windows-friendly)."""
-    if (which("npx") or which("npx.cmd") or which("npx.exe")) is None:
-        raise RuntimeError("npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal.")
-
-
-
-def _build_windows_cmd_for_exe(exe_path: str, args: List[str]) -> List[str]:
-    """Build a subprocess command that works on Windows for .cmd/.bat wrappers."""
-    exe_lower = exe_path.lower()
-    if platform.system().lower().startswith('win') and (exe_lower.endswith('.cmd') or exe_lower.endswith('.bat')):
-        # Use cmd.exe to execute batch wrappers reliably with shell=False
-        return ["cmd", "/c", exe_path, *args]
-    return [exe_path, *args]
 
 def ensure_node_available() -> None:
     if which("node") is None:

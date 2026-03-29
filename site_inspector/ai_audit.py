@@ -3,7 +3,10 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List
 
+from .log import get_logger
 from .utils import clean_url, host_from_url
+
+_log = get_logger("ai_audit")
 
 
 def _example_urls(urls: List[str], limit: int = 5) -> List[str]:
@@ -30,7 +33,8 @@ def _parse_sitemap_xml(xml_text: str | None) -> Dict[str, Any]:
         return result
     try:
         root = ET.fromstring(xml_text)
-    except Exception:
+    except Exception as e:
+        _log.debug("Sitemap XML parse failed: %s", e)
         return result
 
     kind = _strip_ns(root.tag)
