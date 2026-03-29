@@ -22,6 +22,10 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 
 import hashlib
 
+from .log import get_logger
+
+_log = get_logger("utils")
+
 
 # -----------------------------
 # Helpers
@@ -368,6 +372,6 @@ def dns_lookup_basic(host: str) -> Dict[str, List[str]]:
                 ip = sockaddr[0]
                 if ip not in res["AAAA"]:
                     res["AAAA"].append(ip)
-    except Exception:
-        pass
+    except Exception as e:
+        _log.debug("DNS lookup failed for %s: %s", host, e)
     return res

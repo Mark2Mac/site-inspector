@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
+from .log import get_logger, setup_logging
 from .crawl import discover_pages
 from .posture import collect_posture
 from .lighthouse import quality_for_urls, DEFAULT_BUDGET, select_lighthouse_targets
@@ -28,6 +29,9 @@ from .utils import (
     load_json_if_exists,
     now_iso,
 )
+
+
+_log = get_logger("cli")
 
 
 def _safe_console_print(message: str) -> None:
@@ -182,10 +186,10 @@ def cmd_quality(args: argparse.Namespace) -> int:
                 "summary": summarize_dom_clusters(dom_clusters),
             },
         }
-    except Exception:
+    except Exception as e:
         # Best-effort; never fail the run for clustering.
-        pass
-# Persist crawl for later reuse.
+        _log.warning("Template clustering failed: %s", e)
+    # Persist crawl for later reuse.
     safe_write_json(out_dir / "pages.json", crawl)
 
     # Resume-friendly: reuse existing quality summary when present.
@@ -227,8 +231,8 @@ def cmd_quality(args: argparse.Namespace) -> int:
         try:
             quality["selection"] = selection_meta
             quality["selected_urls"] = urls_for_lh
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("Failed to attach selection metadata: %s", e)
 
         safe_write_json(out_dir / "quality_summary.json", quality)
 
@@ -348,8 +352,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         try:
             quality["selection"] = selection_meta
             quality["selected_urls"] = urls_for_lh
-        except Exception:
-            pass
+        except Exception as e:
+            _log.warning("Failed to attach selection metadata: %s", e)
 
         # Keep an explicit cache file so --resume works consistently.
         safe_write_json(out_dir / "quality_summary.json", quality)
@@ -385,20 +389,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     # B3: duplicate candidates (DOM fingerprint preferred; fallback to normalized path)
     try:
         dup = detect_duplicate_pages((crawl or {}).get("pages") or [])
-    except Exception:
+    except Exception as e:
+        _log.warning("Duplicate detection failed: %s", e)
         dup = {"duplicate_groups": [], "duplicate_group_count": 0, "duplicate_url_count": 0}
     run_obj["duplicates"] = dup
 
     # Milestone 3: first SEO auditing layer
     try:
         run_obj["seo"] = audit_seo(crawl, posture)
-    except Exception:
+    except Exception as e:
+        _log.warning("SEO audit failed: %s", e)
         run_obj["seo"] = {"pages_analyzed": 0, "issues": []}
 
     # Milestone 4: AI crawler optimization layer
     try:
         run_obj["ai"] = audit_ai_readiness(crawl, posture, playwright_summary)
-    except Exception:
+    except Exception as e:
+        _log.warning("AI audit failed: %s", e)
         run_obj["ai"] = {"pages_analyzed": 0, "issues": []}
 
     safe_write_json(out_dir / "run.json", run_obj)
@@ -406,12 +413,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     md = build_run_md(run_obj)
 
     try:
-
         md = md.rstrip() + "\n\n" + render_duplicate_summary_md(run_obj.get("duplicates") or {})
-
-    except Exception:
-
-        pass
+    except Exception as e:
+        _log.warning("Failed to render duplicate summary: %s", e)
     safe_write(out_dir / "run.md", md)
 
     _print_generated_block("Run generated", [out_dir / "run.md", out_dir / "run.json"])
@@ -522,6 +526,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None):
+    setup_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

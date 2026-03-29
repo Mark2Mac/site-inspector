@@ -2,7 +2,7 @@ include README.md
 include CHANGELOG.md
 include RELEASING.md
 
-recursive-include site_inspector *.py
+recursive-include site_inspector *.py *.cjs
 
 prune .site_inspector_local
 prune runs

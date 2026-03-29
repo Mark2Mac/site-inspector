@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from . import __version__
+from .log import get_logger
+
+_log = get_logger("reporting")
 
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -165,8 +168,8 @@ def build_run_md(run: Dict[str, Any]) -> str:
                 else:
                     lines.append(f"- `{fp}` — **{pages_n} pages**")
             lines.append("")
-    except Exception:
-        pass
+    except Exception as e:
+        _log.warning("Templates section rendering failed: %s", e)
 
     posture = run.get("posture")
     if posture:

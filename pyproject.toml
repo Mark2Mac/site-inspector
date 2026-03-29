@@ -42,3 +42,6 @@ site-inspector = "site_inspector.cli:main"
 [tool.setuptools.packages.find]
 include = ["site_inspector*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+site_inspector = ["scripts/*.py", "scripts/*.cjs"]
