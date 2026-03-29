@@ -335,7 +335,8 @@ def build_run_md(run: Dict[str, Any]) -> str:
     if pw:
         lines.append("- `playwright_summary.json` — JS-disabled readability and screenshots/HAR summary")
     lines.append("- `run.json` — machine-readable combined report")
-    lines.append("- `run.md` — human-readable combined report\n")
+    lines.append("- `run.md` — human-readable combined report")
+    lines.append("- `run.html` — interactive HTML report with charts and graph visualization\n")
 
     lines.append("## Next steps\n")
     lines.append("- Prioritize high-severity SEO and AI issues before medium/low findings.")

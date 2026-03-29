@@ -23,6 +23,7 @@ from .dom_clustering import cluster_by_dom_fingerprint, summarize_dom_clusters
 from .seo_audit import audit_seo
 from .ai_audit import audit_ai_readiness
 from .graph import analyze_graph
+from .html_report import build_run_html, build_diff_html
 from .utils import (
     normalize_target,
     host_from_url,
@@ -443,7 +444,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         _log.warning("Failed to render duplicate summary: %s", e)
     safe_write(out_dir / "run.md", md)
 
-    _print_generated_block("Run generated", [out_dir / "run.md", out_dir / "run.json"])
+    try:
+        safe_write(out_dir / "run.html", build_run_html(run_obj))
+    except Exception as e:
+        _log.warning("HTML report generation failed: %s", e)
+
+    _print_generated_block("Run generated", [out_dir / "run.html", out_dir / "run.md", out_dir / "run.json"])
     _maybe_show_first_run_tip()
 
     return 0
@@ -468,7 +474,12 @@ def cmd_diff(args: argparse.Namespace) -> int:
     safe_write_json(out_dir / "diff.json", diff)
     safe_write(out_dir / "diff.md", render_diff_md(diff))
 
-    _print_generated_block("Diff generated", [out_dir / "diff.md", out_dir / "diff.json"])
+    try:
+        safe_write(out_dir / "diff.html", build_diff_html(diff))
+    except Exception as e:
+        _log.warning("HTML diff report generation failed: %s", e)
+
+    _print_generated_block("Diff generated", [out_dir / "diff.html", out_dir / "diff.md", out_dir / "diff.json"])
 
     return 0
 
