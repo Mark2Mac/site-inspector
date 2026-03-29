@@ -54,7 +54,7 @@ def _build_priority_findings(run: Dict[str, Any]) -> List[str]:
             }
         )
 
-    for source, key in (("SEO", "seo"), ("AI", "ai")):
+    for source, key in (("SEO", "seo"), ("AI", "ai"), ("Graph", "graph")):
         payload = run.get(key) or {}
         for issue in (payload.get("issues") or []):
             if int(issue.get("count") or 0) > 0:
@@ -284,6 +284,48 @@ def build_run_md(run: Dict[str, Any]) -> str:
                     )
                 else:
                     lines.append(f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} item(s)")
+            lines.append("")
+
+    graph = run.get("graph") or {}
+    if graph.get("nodes"):
+        lines.append("## Link Graph\n")
+        lines.append(f"- Pages (nodes): **{graph.get('nodes')}**")
+        lines.append(f"- Internal links (edges): **{graph.get('edges')}**")
+        lines.append(f"- Graph density: **{graph.get('density')}**")
+        lines.append(f"- Average depth from homepage: **{graph.get('avg_depth')}** clicks")
+        lines.append(f"- Maximum depth: **{graph.get('max_depth')}** clicks")
+
+        orphans = (graph.get("orphan_pages") or {})
+        dead = (graph.get("dead_ends") or {})
+        deep = (graph.get("deep_pages") or {})
+        unreachable = (graph.get("unreachable") or {})
+        artic = (graph.get("articulation_points") or {})
+        sccs = (graph.get("strongly_connected_components") or {})
+
+        lines.append(f"- Orphan pages (no inbound links): **{orphans.get('count', 0)}**")
+        lines.append(f"- Dead-end pages (no outbound links): **{dead.get('count', 0)}**")
+        lines.append(f"- Pages deeper than 3 clicks: **{deep.get('count', 0)}**")
+        lines.append(f"- Unreachable from homepage: **{unreachable.get('count', 0)}**")
+        lines.append(f"- Navigation bottlenecks: **{artic.get('count', 0)}**")
+        lines.append(f"- Link silos (strongly connected components): **{sccs.get('count', 0)}**\n")
+
+        pr_top = (graph.get("pagerank") or {}).get("top") or []
+        if pr_top:
+            lines.append("### Top pages by internal PageRank\n")
+            for entry in pr_top[:5]:
+                lines.append(f"- {entry['url']} — `{entry['score']}`")
+            lines.append("")
+
+        graph_issues = graph.get("issues") or []
+        if graph_issues:
+            lines.append("### Graph issues\n")
+            for issue in graph_issues[:6]:
+                examples = issue.get("examples") or []
+                ex_s = ", ".join(examples[:3])
+                line = f"- **{issue.get('label')}** ({issue.get('severity')}) — {issue.get('count')} page(s)"
+                if ex_s:
+                    line += f" e.g. {ex_s}"
+                lines.append(line)
             lines.append("")
 
     lines.append("## Artifacts\n")

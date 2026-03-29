@@ -22,6 +22,7 @@ from .template_clustering import cluster_urls, summarize_clusters
 from .dom_clustering import cluster_by_dom_fingerprint, summarize_dom_clusters
 from .seo_audit import audit_seo
 from .ai_audit import audit_ai_readiness
+from .graph import analyze_graph
 from .utils import (
     normalize_target,
     host_from_url,
@@ -424,6 +425,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     except Exception as e:
         _log.warning("AI audit failed: %s", e)
         run_obj["ai"] = {"pages_analyzed": 0, "issues": []}
+
+    # Graph analysis layer
+    try:
+        run_obj["graph"] = analyze_graph(crawl)
+    except Exception as e:
+        _log.warning("Graph analysis failed: %s", e)
+        run_obj["graph"] = {"nodes": 0, "edges": 0, "note": f"Graph analysis failed: {e}"}
 
     safe_write_json(out_dir / "run.json", run_obj)
 
