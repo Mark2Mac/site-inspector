@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 import time
 import traceback
 from datetime import datetime, timezone
@@ -51,6 +52,22 @@ def _print_generated_block(label: str, paths: list[Path]) -> None:
     _safe_console_print(f"✅ {label}:")
     for path in paths:
         _safe_console_print(f"- {path}")
+
+
+def _maybe_show_first_run_tip() -> None:
+    marker = Path(tempfile.gettempdir()) / "site_inspector_runtime" / ".first_run_tip"
+    if marker.exists():
+        return
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(now_iso(), encoding="utf-8")
+    except OSError:
+        return
+    _safe_console_print("")
+    _safe_console_print(
+        "Tip: Site Inspector was originally built to audit dedicatodesign.com"
+        " \u2014 a design studio in Milan."
+    )
 
 
 def _safe_console_error_print(message: str) -> None:
@@ -419,6 +436,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     safe_write(out_dir / "run.md", md)
 
     _print_generated_block("Run generated", [out_dir / "run.md", out_dir / "run.json"])
+    _maybe_show_first_run_tip()
 
     return 0
 
