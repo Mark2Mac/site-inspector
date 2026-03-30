@@ -1,4 +1,4 @@
-# Current Project Audit — CrawlLens
+# Current Project Audit — Site Inspector
 
 ## Scope of this audit
 
@@ -6,11 +6,11 @@ This audit is based on the currently validated command flow shared in the latest
 
 Validated working commands:
 
-- `python site_audit.py run https://example.com --max-pages 5 --skip-playwright`
-- `python site_audit.py playwright https://example.com --max-pages 3`
-- `python site_audit.py run https://example.com --skip-playwright --out runs\runA`
-- `python site_audit.py run https://example.com --skip-playwright --out runs\runB`
-- `python site_audit.py diff runs\runA runs\runB --out diffs\runA_vs_runB`
+- `site-inspector run https://example.com --max-pages 5 --skip-playwright`
+- `site-inspector playwright https://example.com --max-pages 3`
+- `site-inspector run https://example.com --skip-playwright --out runs/runA`
+- `site-inspector run https://example.com --skip-playwright --out runs/runB`
+- `site-inspector diff runs/runA runs/runB --out diffs/runA_vs_runB`
 
 ## Audit verdict
 
@@ -100,5 +100,5 @@ Avoid:
 
 ## Conclusion
 
-CrawlLens has crossed the line from idea to usable tool.  
+Site Inspector has crossed the line from idea to usable tool.  
 Now it needs discipline more than novelty.

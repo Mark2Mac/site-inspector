@@ -4,18 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "site-inspector"
-version = "0.7.0"
+version = "0.8.0"
 description = "Windows-first CLI for technical website auditing, structural analysis, SEO, AI crawler readiness, and diff-based site intelligence"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Site Inspector maintainers" }]
 license = "MIT"
-keywords = ["seo", "crawler", "audit", "lighthouse", "playwright", "site-intelligence"]
+keywords = ["seo", "crawler", "audit", "lighthouse", "playwright", "site-intelligence", "website-audit", "web-crawler", "mcp", "pagerank"]
 classifiers = [
+  "Development Status :: 4 - Beta",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Operating System :: OS Independent",
   "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Internet :: WWW/HTTP :: Site Management",
+  "Topic :: Software Development :: Testing",
 ]
 dependencies = [
   "requests>=2.31.0",

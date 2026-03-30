@@ -5,13 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is intentionally simple and human-readable.
 Version numbers reflect public project milestones rather than every internal iteration.
 
-## Unreleased
+## 0.8.0
 
-### Planned
-- Stronger validation semantics for duplicate/content-quality checks
-- Graph intelligence for internal linking and structural analysis
-- Broader structured data and discoverability auditing
-- Additional pipeline-friendly outputs for automation workflows
+### Added
+- **Link graph analysis** (`graph.py`): PageRank, HITS hub/authority scores, orphan pages, dead ends, deep pages (>3 clicks), unreachable pages, strongly connected components, articulation points, crawl depth distribution
+- **`graph.json` output**: machine-readable node-link serialisation of the internal link graph, written alongside `run.json` on every run
+- **Graph diff** (`diff_graph`): compares graph metrics across two runs — orphan/dead-end changes, PageRank shifts, node/edge count delta, average depth delta
+- **Graph changes section** in diff HTML and diff Markdown reports
+- **HTML report** (`html_report.py`): self-contained single-file reports for both `run` and `diff` — no external CDN dependencies, inline CSS, dark-header design
+- **MCP server** (`mcp_server.py`): exposes Site Inspector as AI-assistant tools via the Model Context Protocol — `load_site_run`, `site_graph_insights`, `diff_site_runs`, `list_site_runs`
+- **robots.txt compliance**: crawl BFS now fetches and respects `robots.txt` before visiting pages
+- **Structured crawl logging**: `crawl.py` uses `get_logger("crawl")` throughout; logs crawl start params, sitemap seed count, BFS completion, and any fetch errors
+
+### Improved
+- HITS algorithm guard: handles 1-node graphs that previously caused a crash in `nx.hits()`
+- `enumerate()` subscript bug fixed in MCP `site_graph_insights` formatter
+- Crawl bare-except clauses converted to `except Exception as e` with debug logging
+
+### Fixed
+- Graph analysis is now resilient to single-page crawls and disconnected graphs
 
 ---
 

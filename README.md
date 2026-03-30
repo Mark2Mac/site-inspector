@@ -4,7 +4,8 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.0-informational.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-informational.svg)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
 
 ---
 
@@ -63,10 +64,6 @@ Site Inspector is built around that exact use case.
 ```bash
 pip install -e .
 
-# Full audit
-python site_audit.py run https://example.com --max-pages 50
-
-# Or use the installed entry point
 site-inspector run https://example.com --max-pages 50
 ```
 
@@ -76,6 +73,7 @@ Typical output lands in an auto-named directory such as:
 run.html                 ← interactive report (open in browser)
 run.md                   ← human-readable markdown
 run.json                 ← structured output for automation
+graph.json               ← node-link graph for external tools
 pages.json               ← per-page crawl data
 posture.json             ← TLS, tech stack, third parties
 quality_summary.json     ← Lighthouse scores
@@ -141,13 +139,13 @@ Once configured, you can ask Claude:
 
 ```bash
 # Audit the current site
-python site_audit.py run https://example.com --skip-playwright --out runs/before
+site-inspector run https://example.com --skip-playwright --out runs/before
 
 # Rebuild the site, then audit again
-python site_audit.py run https://example.com --skip-playwright --out runs/after
+site-inspector run https://example.com --skip-playwright --out runs/after
 
 # Compare the two
-python site_audit.py diff runs/before runs/after --out diffs/rebuild
+site-inspector diff runs/before runs/after --out diffs/rebuild
 ```
 
 `diff.md` gives you an executive summary.  
@@ -178,7 +176,7 @@ That makes it useful for high-throughput publishing workflows where manual revie
 ## Commands
 
 ```text
-python site_audit.py <command> [options]
+site-inspector <command> [options]
 ```
 
 | Command | What it does |
@@ -210,10 +208,10 @@ If a run is interrupted, or if you want to regenerate only the later stages, you
 
 ```bash
 # First run
-python site_audit.py run https://example.com --out runs/my-audit
+site-inspector run https://example.com --out runs/my-audit
 
 # Second run: reuse cached outputs where possible
-python site_audit.py run https://example.com --out runs/my-audit --resume
+site-inspector run https://example.com --out runs/my-audit --resume
 ```
 
 This is especially helpful when iterating on reports or validating large sites with sampled quality checks.
@@ -327,9 +325,8 @@ python -m twine check dist/*
 CLI entry points are available through:
 
 ```bash
-python site_audit.py --help
-python -m site_inspector --help
 site-inspector --help
+python -m site_inspector --help
 ```
 
 ---
@@ -339,18 +336,19 @@ site-inspector --help
 - deterministic CLI workflow
 - useful before/after diffing
 - crawl normalization guardrails
+- link graph analysis: PageRank, HITS, orphan/dead-end detection, articulation points
 - duplicate/template-aware analysis
-- AI-crawler readiness checks
-- structured reporting and output contracts
+- AI-crawler readiness checks (robots.txt, sitemap.xml, JS-disabled readability)
+- structured reporting: HTML, Markdown, JSON, `graph.json`
+- MCP server for AI assistant integration
 - packaging and release verification
-- validation corpus coverage
+- test suite with contract validation and regression coverage
 
 ---
 
 ## Near-term roadmap
 
 - stronger validation semantics for duplicate / template signals
-- graph intelligence and richer site structure analysis
 - deeper structured-data and discoverability checks
 - additional pipeline-friendly output formats
 
@@ -362,6 +360,7 @@ See `ROADMAP.md` for planning details.
 
 - Requests — HTTP client
 - Beautiful Soup — HTML parsing
+- NetworkX — link graph analysis and graph metrics
 - Lighthouse — web quality auditing
 - Playwright — browser automation and rendered-page checks
 - pytest — test framework

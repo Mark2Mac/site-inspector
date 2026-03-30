@@ -1,6 +1,8 @@
 include README.md
 include CHANGELOG.md
 include RELEASING.md
+include CONTRIBUTING.md
+include LICENSE
 
 recursive-include site_inspector *.py *.cjs
 

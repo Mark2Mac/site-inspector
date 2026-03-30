@@ -531,7 +531,7 @@ def site_graph_insights(run_dir: str) -> str:
         lines.append(f"  [{sev}] {lbl} — {cnt} page(s){ex_str}")
 
     lines += ["", "TOP PAGES BY INTERNAL PAGERANK"]
-    for i, e in enumerate((graph.get("pagerank") or {}).get("top") or [])[:10]:
+    for i, e in enumerate(((graph.get("pagerank") or {}).get("top") or [])[:10]):
         lines.append(f"  {i+1:2}. {e['url']}  score={e['score']}")
 
     lines += ["", "TOP HUB PAGES (distribute link equity effectively)"]

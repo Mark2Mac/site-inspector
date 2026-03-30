@@ -1012,6 +1012,42 @@ def _build_diff_html(diff: Dict[str, Any]) -> str:
   </div>
 </div>"""
 
+    # Graph changes section
+    gd = diff.get("graph") or {}
+    graph_section = ""
+    if gd:
+        na, nb = gd.get("node_count_a"), gd.get("node_count_b")
+        ea, eb = gd.get("edge_count_a"), gd.get("edge_count_b")
+        dda, ddb, ddd = gd.get("avg_depth_a"), gd.get("avg_depth_b"), gd.get("avg_depth_delta")
+        orphans_added = gd.get("orphans_added") or []
+        orphans_removed = gd.get("orphans_removed") or []
+        dead_added = gd.get("dead_ends_added") or []
+        dead_removed = gd.get("dead_ends_removed") or []
+        pr_shifts = gd.get("pagerank_shifts") or []
+        depth_delta_html = f" (Δ {ddd:+.2f})" if ddd is not None else ""
+        pr_rows = "".join(
+            f'<tr><td class="truncate"><a href="{_esc(s["url"])}">{_esc(s["url"])}</a></td>'
+            f'<td style="color:{("var(--good)" if s["delta"]>=0 else "var(--danger)")}">{s["delta"]:+.4f}</td></tr>'
+            for s in pr_shifts[:10]
+        )
+        graph_section = f"""
+<div class="card" style="margin-top:22px">
+  <div class="card-header"><h2>Graph Changes</h2></div>
+  <div class="card-body">
+    <table class="data-table" style="margin-bottom:12px">
+      <thead><tr><th>Metric</th><th>Run A</th><th>Run B</th></tr></thead>
+      <tbody>
+        {_diff_summary_row("Nodes", na or 0, nb or 0)}
+        {_diff_summary_row("Edges", ea or 0, eb or 0)}
+        <tr><td>Avg depth</td><td>{dda}</td><td>{ddb}{depth_delta_html}</td></tr>
+        {_diff_summary_row("Orphans added", 0, len(orphans_added))}
+        {_diff_summary_row("Dead ends added", 0, len(dead_added))}
+      </tbody>
+    </table>
+    {f'<div style="margin-top:8px"><strong>PageRank shifts:</strong><table class="data-table"><thead><tr><th>URL</th><th>Δ score</th></tr></thead><tbody>{pr_rows}</tbody></table></div>' if pr_rows else ''}
+  </div>
+</div>"""
+
     fail_html = ""
     if fail_reasons:
         fail_html = "<ul style='margin:8px 0 0 18px;font-size:13px'>" + "".join(f"<li>{_esc(r)}</li>" for r in fail_reasons) + "</ul>"
@@ -1056,6 +1092,7 @@ def _build_diff_html(diff: Dict[str, Any]) -> str:
   </div>
   {reg_section}
   {pages_section}
+  {graph_section}
   {tech_section}
 </main>
 {_footer_html()}

@@ -114,42 +114,42 @@ function Test-PytestLoop {
 
 function Test-HelpChecks {
     Write-Step "Checking CLI help"
-    Run-Cmd 'py site_audit.py --help'
-    Run-Cmd 'py site_audit.py --version'
+    Run-Cmd 'py -m site_inspector --help'
+    Run-Cmd 'py -m site_inspector --version'
     Run-Cmd 'py -m site_inspector --version'
     Run-Cmd 'py -m site_inspector --help'
-    Run-Cmd 'py site_audit.py crawl --help'
-    Run-Cmd 'py site_audit.py quality --help'
-    Run-Cmd 'py site_audit.py playwright --help'
-    Run-Cmd 'py site_audit.py run --help'
-    Run-Cmd 'py site_audit.py diff --help'
+    Run-Cmd 'py -m site_inspector crawl --help'
+    Run-Cmd 'py -m site_inspector quality --help'
+    Run-Cmd 'py -m site_inspector playwright --help'
+    Run-Cmd 'py -m site_inspector run --help'
+    Run-Cmd 'py -m site_inspector diff --help'
 }
 
 function Test-SmokeCore {
     Ensure-Dirs
     Write-Step "Running smoke core commands"
-    Run-Cmd ('py site_audit.py crawl "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\crawl_test"))
-    Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_test"))
-    Run-Cmd ('py site_audit.py playwright "{0}" --max-pages {1} --out "{2}"' -f $Site, $PlaywrightPages, (Join-Root "runs\playwright_test"))
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\run_test"))
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\run_full_test"))
+    Run-Cmd ('py -m site_inspector crawl "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\crawl_test"))
+    Run-Cmd ('py -m site_inspector quality "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_test"))
+    Run-Cmd ('py -m site_inspector playwright "{0}" --max-pages {1} --out "{2}"' -f $Site, $PlaywrightPages, (Join-Root "runs\playwright_test"))
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\run_test"))
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\run_full_test"))
 }
 
 function Test-ResumeChecks {
     Ensure-Dirs
     Write-Step "Running resume/cache checks"
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\resume_test"))
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\resume_test"))
-    Run-Cmd ('py site_audit.py crawl "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\crawl_resume_test"))
-    Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_resume_test"))
-    Run-Cmd ('py site_audit.py playwright "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $PlaywrightPages, (Join-Root "runs\playwright_resume_test"))
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\resume_test"))
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\resume_test"))
+    Run-Cmd ('py -m site_inspector crawl "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\crawl_resume_test"))
+    Run-Cmd ('py -m site_inspector quality "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_resume_test"))
+    Run-Cmd ('py -m site_inspector playwright "{0}" --max-pages {1} --resume --out "{2}"' -f $Site, $PlaywrightPages, (Join-Root "runs\playwright_resume_test"))
 }
 
 function Test-DuplicateChecks {
     Ensure-Dirs
     Write-Step "Running duplicate/B3 checks"
     $dupRun = Join-Root "runs\dup_test"
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages 10 --skip-playwright --out "{1}"' -f $Site, $dupRun)
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages 10 --skip-playwright --out "{1}"' -f $Site, $dupRun)
 
     $jsonPath = Join-Root "runs\dup_test\run.json"
     $json = Get-Content -Raw -Path $jsonPath | ConvertFrom-Json
@@ -173,10 +173,10 @@ function Test-DiffChecks {
     $diffDir = Join-Root "diffs\golden_vs_candidate"
     $diffJsonDir = Join-Root "diffs\json_vs_json"
 
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $golden)
-    Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
-    Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
-    Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\golden\run.json"), (Join-Root "runs\candidate\run.json"), $diffJsonDir)
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $golden)
+    Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
+    Run-Cmd ('py -m site_inspector diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
+    Run-Cmd ('py -m site_inspector diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\golden\run.json"), (Join-Root "runs\candidate\run.json"), $diffJsonDir)
 }
 
 function Test-ErrorChecks {
@@ -184,22 +184,22 @@ function Test-ErrorChecks {
     Write-Step "Running error-handling checks"
     $candidate = Join-Root "runs\candidate"
     if (-not (Test-Path (Join-Root "runs\candidate\run.json"))) {
-        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
+        Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
     }
 
     New-Item -ItemType Directory -Force -Path (Join-Root "runs\empty_test") | Out-Null
     Write-Host "These commands are expected to fail with a human-readable error." -ForegroundColor Yellow
 
-    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
-        py site_audit.py diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
+    Expect-NativeFailure ('py -m site_inspector diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\does_not_exist"), $candidate, (Join-Root "diffs\bad_left")) {
+        py -m site_inspector diff (Join-Root "runs\does_not_exist") $candidate --out (Join-Root "diffs\bad_left")
     }
 
-    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
-        py site_audit.py diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
+    Expect-NativeFailure ('py -m site_inspector diff "{0}" "{1}" --out "{2}"' -f $candidate, (Join-Root "runs\does_not_exist"), (Join-Root "diffs\bad_right")) {
+        py -m site_inspector diff $candidate (Join-Root "runs\does_not_exist") --out (Join-Root "diffs\bad_right")
     }
 
-    Expect-NativeFailure ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
-        py site_audit.py diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
+    Expect-NativeFailure ('py -m site_inspector diff "{0}" "{1}" --out "{2}"' -f (Join-Root "runs\empty_test"), $candidate, (Join-Root "diffs\bad_empty")) {
+        py -m site_inspector diff (Join-Root "runs\empty_test") $candidate --out (Join-Root "diffs\bad_empty")
     }
 }
 
@@ -207,9 +207,9 @@ function Test-BudgetChecks {
     Ensure-Dirs
     Write-Step "Running quality budget checks"
     $budgetPath = Write-LooseBudget
-    Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --budget "{2}" --out "{3}"' -f $Site, $MaxPages, $budgetPath, (Join-Root "runs\quality_budget"))
-    Run-Cmd ('py site_audit.py quality "{0}" --max-pages 10 --lighthouse-sample 3 --out "{1}"' -f $Site, (Join-Root "runs\quality_sample"))
-    Run-Cmd ('py site_audit.py quality "{0}" --max-pages 10 --lighthouse-sample 3 --lighthouse-per-group 1 --out "{1}"' -f $Site, (Join-Root "runs\quality_grouped"))
+    Run-Cmd ('py -m site_inspector quality "{0}" --max-pages {1} --budget "{2}" --out "{3}"' -f $Site, $MaxPages, $budgetPath, (Join-Root "runs\quality_budget"))
+    Run-Cmd ('py -m site_inspector quality "{0}" --max-pages 10 --lighthouse-sample 3 --out "{1}"' -f $Site, (Join-Root "runs\quality_sample"))
+    Run-Cmd ('py -m site_inspector quality "{0}" --max-pages 10 --lighthouse-sample 3 --lighthouse-per-group 1 --out "{1}"' -f $Site, (Join-Root "runs\quality_grouped"))
 }
 
 function Test-OutputChecks {
@@ -227,19 +227,19 @@ function Test-OutputChecks {
     $qualitySummaryPath = Join-Root "runs\quality_test\quality_summary.json"
 
     if (-not (Test-Path $runJsonPath)) {
-        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $runTest)
+        Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $runTest)
     }
     if (-not (Test-Path (Join-Root "runs\golden\run.json"))) {
-        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $golden)
+        Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $golden)
     }
     if (-not (Test-Path (Join-Root "runs\candidate\run.json"))) {
-        Run-Cmd ('py site_audit.py run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
+        Run-Cmd ('py -m site_inspector run "{0}" --max-pages {1} --skip-playwright --out "{2}"' -f $Site, $MaxPages, $candidate)
     }
     if (-not (Test-Path $diffJsonPath)) {
-        Run-Cmd ('py site_audit.py diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
+        Run-Cmd ('py -m site_inspector diff "{0}" "{1}" --out "{2}"' -f $golden, $candidate, $diffDir)
     }
     if (-not (Test-Path $qualitySummaryPath)) {
-        Run-Cmd ('py site_audit.py quality "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_test"))
+        Run-Cmd ('py -m site_inspector quality "{0}" --max-pages {1} --out "{2}"' -f $Site, $MaxPages, (Join-Root "runs\quality_test"))
     }
 
     Get-ChildItem $runTest | Out-Host

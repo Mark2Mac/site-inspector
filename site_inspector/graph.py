@@ -73,8 +73,9 @@ def _pagerank(g: nx.DiGraph) -> Dict[str, float]:
 
 
 def _hits(g: nx.DiGraph) -> Tuple[Dict[str, float], Dict[str, float]]:
-    if g.number_of_nodes() == 0:
-        return {}, {}
+    if g.number_of_nodes() < 2:
+        uniform = {node: 1.0 for node in g.nodes}
+        return uniform, uniform
     try:
         hubs, authorities = nx.hits(g, max_iter=200)
         return hubs, authorities
@@ -158,6 +159,15 @@ def _depth_distribution(depths: Dict[str, int]) -> Dict[int, int]:
     for d in depths.values():
         dist[d] = dist.get(d, 0) + 1
     return dict(sorted(dist.items()))
+
+
+# ------------------------------------------------------------------
+# Serialisation
+# ------------------------------------------------------------------
+
+def serialize_graph(g: nx.DiGraph) -> Dict[str, Any]:
+    """Serialise a DiGraph to a JSON-safe node-link dict."""
+    return nx.node_link_data(g, edges="links")
 
 
 # ------------------------------------------------------------------

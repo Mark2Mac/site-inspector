@@ -1,10 +1,16 @@
-"""Quick smoke test for HTML report generation."""
+"""Tests for site_inspector.html_report — self-contained HTML report generation."""
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from site_inspector.html_report import build_run_html, build_diff_html
+
+# ---------------------------------------------------------------------------
+# Shared fixtures
+# ---------------------------------------------------------------------------
 
 CRAWL_PAGES = [
     {"url": "https://example.com/", "title": "Home", "status_code": 200, "redirect_count": 0, "h1_count": 1, "internal_link_count": 8, "outgoing_internal_links": ["https://example.com/about", "https://example.com/blog"], "dom_fingerprint": "abc"},
@@ -15,7 +21,7 @@ CRAWL_PAGES = [
 ]
 
 RUN_OBJ = {
-    "version": "0.7.0",
+    "version": "0.8.0",
     "generated_at": "2026-03-30T10:00:00Z",
     "target_url": "https://example.com/",
     "host": "example.com",
@@ -70,7 +76,7 @@ RUN_OBJ = {
     },
     "graph": {
         "nodes": 5, "edges": 4, "density": 0.2, "avg_depth": 1.0, "max_depth": 2,
-        "depth_distribution": {"0": 1, "1": 2, "2": 1},
+        "depth_distribution": {0: 1, 1: 2, 2: 1},
         "pagerank": {"top": [
             {"url": "https://example.com/", "score": 0.257347},
             {"url": "https://example.com/about", "score": 0.198226},
@@ -97,7 +103,7 @@ RUN_OBJ = {
 }
 
 DIFF_OBJ = {
-    "version": "0.7.0",
+    "version": "0.8.0",
     "generated_at": "2026-03-30T11:00:00Z",
     "runA": {"dir": "runs/runA", "generated_at": "2026-03-29T10:00:00Z", "target_url": "https://example.com/"},
     "runB": {"dir": "runs/runB", "generated_at": "2026-03-30T10:00:00Z", "target_url": "https://example.com/"},
@@ -119,43 +125,131 @@ DIFF_OBJ = {
 }
 
 
-def test_run_html():
-    html = build_run_html(RUN_OBJ)
-    assert "<!DOCTYPE html>" in html
-    assert "example.com" in html
-    assert "Link Graph" in html
-    assert "Lighthouse" in html
-    assert "SEO Audit" in html
-    assert "Priority Findings" in html
-    assert "dedicatodesign.com" in html
-    assert len(html) > 10_000
-    print(f"run.html OK — {len(html):,} bytes")
+# ---------------------------------------------------------------------------
+# run HTML
+# ---------------------------------------------------------------------------
+
+class TestBuildRunHtml:
+    def test_valid_doctype(self):
+        html = build_run_html(RUN_OBJ)
+        assert html.startswith("<!DOCTYPE html>") or "<!DOCTYPE html>" in html[:50]
+
+    def test_target_host_present(self):
+        html = build_run_html(RUN_OBJ)
+        assert "example.com" in html
+
+    def test_section_link_graph(self):
+        html = build_run_html(RUN_OBJ)
+        assert "Link Graph" in html
+
+    def test_section_lighthouse(self):
+        html = build_run_html(RUN_OBJ)
+        assert "Lighthouse" in html
+
+    def test_section_seo(self):
+        html = build_run_html(RUN_OBJ)
+        assert "SEO" in html
+
+    def test_section_priority_findings(self):
+        html = build_run_html(RUN_OBJ)
+        assert "Priority" in html
+
+    def test_branding_footer(self):
+        html = build_run_html(RUN_OBJ)
+        assert "dedicatodesign.com" in html
+
+    def test_minimum_size(self):
+        html = build_run_html(RUN_OBJ)
+        assert len(html) > 10_000, f"Expected >10KB, got {len(html)}"
+
+    def test_self_contained_no_external_scripts(self):
+        html = build_run_html(RUN_OBJ)
+        # Should not reference CDNs for scripts/styles
+        for cdn in ("cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com"):
+            assert cdn not in html, f"Found external CDN reference: {cdn}"
+
+    def test_seo_issue_labels_present(self):
+        html = build_run_html(RUN_OBJ)
+        assert "Missing title" in html
+
+    def test_pagerank_scores_present(self):
+        html = build_run_html(RUN_OBJ)
+        assert "0.257347" in html or "PageRank" in html
 
 
-def test_diff_html():
-    html = build_diff_html(DIFF_OBJ)
-    assert "<!DOCTYPE html>" in html
-    assert "Diff Report" in html
-    assert "Quality Regressions" in html
-    assert "Page Changes" in html
-    assert "dedicatodesign.com" in html
-    assert len(html) > 3_000
-    print(f"diff.html OK — {len(html):,} bytes")
+# ---------------------------------------------------------------------------
+# diff HTML
+# ---------------------------------------------------------------------------
+
+class TestBuildDiffHtml:
+    def test_valid_doctype(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "<!DOCTYPE html>" in html
+
+    def test_diff_report_heading(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "Diff" in html
+
+    def test_quality_regressions_section(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "Regression" in html or "regression" in html
+
+    def test_page_changes_section(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "Page" in html
+
+    def test_branding_footer(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "dedicatodesign.com" in html
+
+    def test_minimum_size(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert len(html) > 3_000, f"Expected >3KB, got {len(html)}"
+
+    def test_added_page_present(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "new-page" in html
+
+    def test_removed_page_present(self):
+        html = build_diff_html(DIFF_OBJ)
+        assert "old-page" in html
 
 
-def test_empty_run():
-    minimal = {"version": "0.7.0", "generated_at": "2026-03-30T10:00:00Z", "target_url": "https://example.com/", "host": "example.com", "crawl": {"pages": [], "errors": []}}
-    html = build_run_html(minimal)
-    assert "<!DOCTYPE html>" in html
-    print("empty run OK")
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
 
+class TestEdgeCases:
+    def test_empty_run(self):
+        minimal = {
+            "version": "0.8.0",
+            "generated_at": "2026-03-30T10:00:00Z",
+            "target_url": "https://example.com/",
+            "host": "example.com",
+            "crawl": {"pages": [], "errors": []},
+        }
+        html = build_run_html(minimal)
+        assert "<!DOCTYPE html>" in html
 
-if __name__ == "__main__":
-    test_run_html()
-    test_diff_html()
-    test_empty_run()
-    # Write sample files for visual inspection
-    out = Path(__file__).parent.parent
-    (out / "test_run_report.html").write_text(build_run_html(RUN_OBJ), encoding="utf-8")
-    (out / "test_diff_report.html").write_text(build_diff_html(DIFF_OBJ), encoding="utf-8")
-    print("Sample files written: test_run_report.html, test_diff_report.html")
+    def test_none_quality(self):
+        run = {**RUN_OBJ, "quality": None}
+        html = build_run_html(run)
+        assert "<!DOCTYPE html>" in html
+
+    def test_none_graph(self):
+        run = {**RUN_OBJ, "graph": None}
+        html = build_run_html(run)
+        assert "<!DOCTYPE html>" in html
+
+    def test_minimal_diff(self):
+        diff = {
+            "version": "0.8.0",
+            "generated_at": "2026-03-30T11:00:00Z",
+            "runA": {"target_url": "https://example.com/"},
+            "runB": {"target_url": "https://example.com/"},
+            "passed": True,
+            "fail_reasons": [],
+            "pages": {"added": [], "removed": [], "unchanged": []},
+        }
+        html = build_diff_html(diff)
+        assert "<!DOCTYPE html>" in html

@@ -17,7 +17,7 @@ def fixture_root(name: str) -> Path:
 
 
 def run_cli(args: Iterable[str], env_extra: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    cmd = [sys.executable, "site_audit.py", *list(args)]
+    cmd = [sys.executable, "-m", "site_inspector", *list(args)]
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"

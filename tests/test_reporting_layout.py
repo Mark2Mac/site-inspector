@@ -6,7 +6,7 @@ from site_inspector.reporting import build_run_md
 
 def test_build_run_md_contains_polished_sections() -> None:
     run = {
-        "version": "0.7.0",
+        "version": "0.8.0",
         "generated_at": "2026-03-07T00:00:00Z",
         "target_url": "https://example.com",
         "host": "example.com",
@@ -26,7 +26,7 @@ def test_build_run_md_contains_polished_sections() -> None:
 
 def test_render_diff_md_contains_executive_summary() -> None:
     diff = {
-        "version": "0.7.0",
+        "version": "0.8.0",
         "generated_at": "2026-03-07T00:00:00Z",
         "passed": True,
         "fail_reasons": [],

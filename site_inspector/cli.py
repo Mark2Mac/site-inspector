@@ -22,7 +22,7 @@ from .template_clustering import cluster_urls, summarize_clusters
 from .dom_clustering import cluster_by_dom_fingerprint, summarize_dom_clusters
 from .seo_audit import audit_seo
 from .ai_audit import audit_ai_readiness
-from .graph import analyze_graph
+from .graph import analyze_graph, build_graph, serialize_graph
 from .html_report import build_run_html, build_diff_html
 from .utils import (
     normalize_target,
@@ -429,7 +429,9 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     # Graph analysis layer
     try:
+        g = build_graph(crawl)
         run_obj["graph"] = analyze_graph(crawl)
+        safe_write_json(out_dir / "graph.json", serialize_graph(g))
     except Exception as e:
         _log.warning("Graph analysis failed: %s", e)
         run_obj["graph"] = {"nodes": 0, "edges": 0, "note": f"Graph analysis failed: {e}"}
@@ -449,7 +451,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     except Exception as e:
         _log.warning("HTML report generation failed: %s", e)
 
-    _print_generated_block("Run generated", [out_dir / "run.html", out_dir / "run.md", out_dir / "run.json"])
+    _print_generated_block("Run generated", [out_dir / "run.html", out_dir / "run.md", out_dir / "run.json", out_dir / "graph.json"])
     _maybe_show_first_run_tip()
 
     return 0
@@ -489,7 +491,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
 # -----------------------------
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="site_audit.py")
+    p = argparse.ArgumentParser(prog="site-inspector")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     sub = p.add_subparsers(dest="cmd", required=True)

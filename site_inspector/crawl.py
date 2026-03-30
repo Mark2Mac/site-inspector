@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import threading
+import urllib.robotparser
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import urljoin
 
 import xml.etree.ElementTree as ET
 
 from .inner_collectors import ensure_inner_deps, get_or_create_inner_venv, run_inner
+from .log import get_logger
 from .utils import (
     clean_url,
     host_from_url,
@@ -23,6 +26,8 @@ from .utils import (
     register_query_shape,
     path_depth_cap_exceeded,
 )
+
+_log = get_logger("crawl")
 
 
 # Crawl: sitemap first, then concurrent BFS
@@ -84,6 +89,7 @@ def discover_pages(
     Scale-A version: concurrent link discovery with bounded worker pool.
     """
     host = host_from_url(target_url)
+    _log.info("Crawl starting: %s (max_pages=%d, workers=%d)", target_url, max_pages, workers)
 
     # Clamp workers (this still spawns subprocesses; don't go insane)
     cw = max(1, min(32, int(workers)))
@@ -112,6 +118,18 @@ def discover_pages(
 
 
 
+    # Fetch robots.txt for crawl compliance
+    _robots: Optional[urllib.robotparser.RobotFileParser] = None
+    robots_url = urljoin(target_url, "/robots.txt")
+    try:
+        rp = urllib.robotparser.RobotFileParser()
+        rp.set_url(robots_url)
+        rp.read()
+        _robots = rp
+        _log.info("robots.txt loaded from %s", robots_url)
+    except Exception as e:
+        _log.debug("Could not fetch robots.txt from %s: %s", robots_url, e)
+
     def _accept_candidate(url: str) -> str | None:
         nonlocal query_shape_cap_hits, path_depth_cap_hits
         u = clean_url(url)
@@ -126,6 +144,8 @@ def discover_pages(
             return None
         if query_shape_cap_exceeded(u, query_shapes_by_path, max_shapes_per_path=query_shape_cap_per_path):
             query_shape_cap_hits += 1
+            return None
+        if _robots is not None and not _robots.can_fetch("SiteInspector", u):
             return None
         return u
 
@@ -143,6 +163,7 @@ def discover_pages(
                 continue
             discovered.append(u)
             register_query_shape(u, query_shapes_by_path)
+        _log.info("Sitemap seeded %d URL(s)", len(discovered))
 
     # Concurrent BFS
     visited: Set[str] = set(discovered)
@@ -250,9 +271,9 @@ def discover_pages(
                     "dom_fingerprint_nodes": fp_nodes,
                 },
             )
-        except Exception:
+        except Exception as e:
             # Cache is best-effort; never fail the crawl for it.
-            pass
+            _log.debug("Page cache write failed for %s: %s", url, e)
 
         return url, cleaned, status, err, meta
 
@@ -316,6 +337,8 @@ def discover_pages(
     finally:
         pass  # venv is preserved for reuse across calls
 
+    _log.info("BFS complete: %d page(s) discovered", len(discovered))
+
     for u in discovered[:max_pages]:
         pid = stable_page_id(u)
         fp = None
@@ -341,7 +364,8 @@ def discover_pages(
                     "internal_link_count": cached.get("internal_link_count") or 0,
                     "outgoing_internal_links": cached.get("links") or [],
                 }
-        except Exception:
+        except Exception as e:
+            _log.debug("Could not read page cache for %s: %s", u, e)
             fp = None
             status = None
             err = None
