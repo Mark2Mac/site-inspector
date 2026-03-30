@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "site-inspector"
 version = "0.8.0"
-description = "Windows-first CLI for technical website auditing, structural analysis, SEO, AI crawler readiness, and diff-based site intelligence"
+description = "Cross-platform CLI for technical website auditing, structural analysis, SEO, AI crawler readiness, and diff-based site intelligence"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Site Inspector maintainers" }]

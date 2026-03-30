@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .utils import _run, safe_write, slugify_url_for_filename, which, now_iso, ensure_npx_available, _build_windows_cmd_for_exe
+from .utils import _run, safe_write, slugify_url_for_filename, _find_exe, _build_cmd, now_iso
 
 
 # -----------------------------
@@ -26,9 +26,8 @@ def _get_playwright_script_text() -> str:
 
 
 def ensure_node_available() -> None:
-    if which("node") is None:
-        raise RuntimeError("node not found in PATH. Install Node.js and restart your terminal.")
-    ensure_npx_available()
+    _find_exe("node")
+    _find_exe("npx")
 
 
 def ensure_playwright_chromium_installed(cache_dir: Path, out_dir: Path) -> Dict[str, Any]:
@@ -50,11 +49,8 @@ def ensure_playwright_chromium_installed(cache_dir: Path, out_dir: Path) -> Dict
     if marker.exists():
         return {"installed": True, "cached": True, "cache_dir": str(cache_dir)}
 
-    npx_path = which("npx") or which("npx.cmd") or which("npx.exe")
-    if not npx_path:
-        raise RuntimeError("npx not found in PATH. Install Node.js and restart your terminal.")
-
-    cmd = _build_windows_cmd_for_exe(npx_path, ["--yes", "playwright", "install", "chromium"])
+    npx_path = _find_exe("npx")
+    cmd = _build_cmd(npx_path, ["--yes", "playwright", "install", "chromium"])
     rc, so, se = _run(cmd, env=env, timeout=1800)
     safe_write(raw_dir / "playwright_install.stdout.txt", so)
     safe_write(raw_dir / "playwright_install.stderr.txt", se)
@@ -96,11 +92,8 @@ def run_playwright_for_url(url: str, *, out_dir: Path, timeout_s: int, cache_dir
 
     # Use npx to provide playwright package temporarily:
     # npx -p playwright node script.cjs <url> <outDir> <timeoutMs>
-    npx_path = which("npx") or which("npx.cmd") or which("npx.exe")
-    if not npx_path:
-        raise RuntimeError("npx not found in PATH. Install Node.js and restart your terminal.")
-
-    cmd = _build_windows_cmd_for_exe(
+    npx_path = _find_exe("npx")
+    cmd = _build_cmd(
         npx_path,
         [
             "--yes",

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from urllib.parse import urlparse
 
-from .utils import _run, safe_write, slugify_url_for_filename, which, now_iso, ensure_npx_available, _build_windows_cmd_for_exe
+from .utils import _run, safe_write, slugify_url_for_filename, _find_exe, _build_cmd, now_iso
 
 
 # -----------------------------
@@ -33,8 +33,6 @@ DEFAULT_BUDGET: Dict[str, Any] = {
 
 
 def run_lighthouse(url: str, *, out_dir: Path, timeout_s: int) -> Dict[str, Any]:
-    ensure_npx_available()
-
     lh_dir = out_dir / "lighthouse"
     lh_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,11 +42,8 @@ def run_lighthouse(url: str, *, out_dir: Path, timeout_s: int) -> Dict[str, Any]
 
     chrome_flags = "--headless --disable-gpu --no-sandbox"
 
-    npx_path = which("npx") or which("npx.cmd") or which("npx.exe")
-    if not npx_path:
-        raise RuntimeError("npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal.")
-
-    cmd = _build_windows_cmd_for_exe(npx_path, [
+    npx_path = _find_exe("npx")
+    cmd = _build_cmd(npx_path, [
         "--yes",
         "lighthouse",
         url,

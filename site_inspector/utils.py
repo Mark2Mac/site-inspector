@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import socket
 import ssl
 import subprocess
@@ -294,33 +295,25 @@ def stable_page_id(url: str) -> str:
     return hashlib.sha1(b).hexdigest()[:16]
 
 
-def which(exe: str) -> Optional[str]:
-    paths = os.environ.get("PATH", "").split(os.pathsep)
-    exts = [""] if "." in exe else [".exe", ".cmd", ".bat", ""]
-    for d in paths:
-        d = d.strip('"')
-        if not d:
-            continue
-        for ext in exts:
-            cand = Path(d) / (exe + ext)
-            if cand.exists():
-                return str(cand)
-    return None
+def _find_exe(name: str) -> str:
+    """Locate an executable on PATH (cross-platform).
 
-
-def ensure_npx_available() -> None:
-    """Raise RuntimeError if npx is not on PATH (Windows-friendly)."""
-    if (which("npx") or which("npx.cmd") or which("npx.exe")) is None:
+    Uses shutil.which which handles PATHEXT on Windows (.exe/.cmd/.bat)
+    and plain executables on Mac/Linux automatically.
+    """
+    path = shutil.which(name)
+    if path is None:
         raise RuntimeError(
-            "npx not found in PATH. Install Node.js (includes npm/npx) and restart your terminal. "
-            "Tip: in PowerShell run `where npx` to verify."
+            f"{name!r} not found in PATH. "
+            "Install it and restart your terminal."
         )
+    return path
 
 
-def _build_windows_cmd_for_exe(exe_path: str, args: List[str]) -> List[str]:
-    """Build a subprocess command that works on Windows for .cmd/.bat wrappers."""
+def _build_cmd(exe_path: str, args: List[str]) -> List[str]:
+    """Build a subprocess command list, wrapping .cmd/.bat with 'cmd /c' on Windows."""
     low = exe_path.lower()
-    if low.endswith(".cmd") or low.endswith(".bat"):
+    if low.endswith((".cmd", ".bat")):
         return ["cmd", "/c", exe_path, *args]
     return [exe_path, *args]
 

@@ -9,7 +9,7 @@
 
 ---
 
-Site Inspector is a Windows-first CLI for **technical website auditing**, with a strong focus on **before/after rebuild analysis**, **SEO and AI-crawler readiness**, and **structured regression checks**.
+Site Inspector is a cross-platform CLI for **technical website auditing**, with a strong focus on **before/after rebuild analysis**, **SEO and AI-crawler readiness**, and **structured regression checks**.
 
 The core workflow is simple:
 
@@ -255,16 +255,20 @@ pip install -e ".[dev]"
 
 ## Testing
 
-Deterministic test suite:
+Deterministic test suite (all platforms):
 
 ```bash
 pytest -q
 pytest -vv
 ```
 
-Windows smoke and workflow checks:
+Extended smoke tests:
 
-```powershell
+```bash
+# Mac / Linux
+bash run_tests.sh
+
+# Windows
 powershell -ExecutionPolicy Bypass -File .\run_tests.ps1 -All
 ```
 
