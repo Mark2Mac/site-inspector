@@ -18,7 +18,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Topic :: Internet :: WWW/HTTP :: Site Management",
   "Topic :: Software Development :: Testing",
 ]
@@ -26,6 +25,10 @@ dependencies = [
   "requests>=2.31.0",
   "beautifulsoup4>=4.12.0",
   "networkx>=3.0",
+  # networkx does not pull these in, and the graph analysis needs them: PageRank
+  # falls back to a numpy solver and the SCC/depth work reaches scipy.
+  "numpy>=1.24",
+  "scipy>=1.10",
 ]
 
 [project.optional-dependencies]
